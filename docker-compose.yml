@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tradalyze:latest
+    container_name: tradalyze_app
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./database:/var/www/html/database
+      - ./storage:/var/www/html/storage
+    environment:
+      - APP_NAME=Tradalyze
+      - APP_KEY=base64:x4osgOdx6iDQ1+ViZh89QAXP+Oh78fc51tGx69S0vvU=
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_URL=http://localhost:8080
+      - LOG_LEVEL=error
+      - DB_CONNECTION=sqlite
+      - DB_DATABASE=/var/www/html/database/database.sqlite
+      - SESSION_DRIVER=database
+      - QUEUE_CONNECTION=database
+    networks:
+      - tradalyze_network
+
+  # Optional: MySQL database (uncomment if you prefer MySQL over SQLite)
+  # mysql:
+  #   image: mysql:8.0
+  #   container_name: tradalyze_mysql
+  #   restart: unless-stopped
+  #   environment:
+  #     MYSQL_DATABASE: tradalyze
+  #     MYSQL_ROOT_PASSWORD: root_password
+  #     MYSQL_USER: tradalyze_user
+  #     MYSQL_PASSWORD: tradalyze_password
+  #   volumes:
+  #     - mysql_data:/var/lib/mysql
+  #   networks:
+  #     - tradalyze_network
+
+networks:
+  tradalyze_network:
+    driver: bridge
+
+# Uncomment if using MySQL
+# volumes:
+#   mysql_data:

@@ -1,0 +1,179 @@
+Goal: Ingest Interactive Brokers trade data (CSV) into a normalized SQLite schema that supports CRUD operations, position tracking, FIFO accounting, and realized PnL on stock + US options (including chunked fills such as SPX).
+Requirement: Deleting an entity must delete associated dependent data (no orphan rows).
+
+1. Database Schema Requirements
+
+Create the following relational tables:
+
+(A) instruments table
+
+One row per unique contract or stock.
+
+Required fields:
+
+id (PK)
+
+symbol
+
+underlying_symbol
+
+asset_type (STK or OPT)
+
+expiry (nullable)
+
+strike (nullable)
+
+put_call (nullable)
+
+multiplier (default 100 for US options)
+
+currency
+
+Uniqueness constraint:
+symbol + expiry + strike + put_call + asset_type
+
+(B) fills table
+
+Stores raw fills (executions) from brokerage.
+
+Fields:
+
+id (PK)
+
+instrument_id (FK → instruments.id, cascade delete)
+
+datetime
+
+side (BUY/SELL)
+
+quantity
+
+price
+
+fees
+
+order_id
+
+exec_id
+
+No PnL logic here — pure ledger ingestion.
+
+(C) positions table
+
+Stores derived logical positions after FIFO matching.
+
+Fields:
+
+id (PK)
+
+instrument_id (FK → instruments.id, cascade delete)
+
+open_datetime
+
+close_datetime (nullable for open positions)
+
+quantity (absolute size of position)
+
+cost_basis (per contract)
+
+realized_pnl (per position)
+
+One row per round-trip (Open→Close).
+
+(D) ledger table
+
+Stores accounting adjustments.
+
+Fields:
+
+id (PK)
+
+instrument_id (FK)
+
+datetime
+
+type (commission/fee/pnl/dividend/expiry/assignment)
+
+amount
+
+2. FIFO Position Matching Logic
+
+Rules for PnL resolution:
+
+BUY adds quantity to FIFO queue.
+SELL removes from FIFO queue and creates/updates a position entry.
+PnL = (sell_price - buy_price) * multiplier * qty - fees
+
+
+If multiple sell fills consume multiple buy fills, split into multiple FIFO legs.
+
+3. CRUD Behavior / Cascading Rules
+
+When a row in the instruments table is deleted:
+
+delete all related fills
+
+delete all related positions
+
+delete all related ledger entries
+
+When a fills row is deleted:
+
+recompute FIFO matching & update positions and ledger accordingly
+
+Use foreign keys with:
+
+ON DELETE CASCADE
+
+
+to enforce this at DB level.
+
+4. Data Integrity Constraints
+
+No negative quantity positions
+
+No zero quantity positions
+
+For options:
+
+expiry + strike + put_call must not be null
+
+For stocks:
+
+strike + expiry + put_call must be null
+
+FIFO must operate globally per instrument_id
+
+5. Import Pipeline Requirements
+
+Import pipeline must:
+
+detect unique instruments
+
+insert raw fills
+
+normalize fields (expiry, strike, put/call)
+
+trigger position/FIFO processing
+
+6. Query Requirements
+
+Must support queries:
+
+realized pnl per symbol
+
+realized pnl per day/week/month
+
+open positions
+
+closed positions
+
+trades per underlying
+
+pnl aggregated by options vs stocks
+
+Example queries the system should handle:
+
+SELECT * FROM positions WHERE instrument_id IN (...)
+
+SELECT SUM(realized_pnl) FROM positions WHERE underlying_symbol='SPX';

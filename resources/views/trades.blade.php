@@ -81,7 +81,29 @@
 <div class="bg-white rounded-lg shadow-md overflow-hidden w-full">
     <!-- Filters Section -->
     <div class="px-4 md:px-6 py-4 bg-gray-50 border-b border-gray-200 overflow-x-hidden">
-        <form method="GET" action="{{ route('trades') }}" id="filter-form">
+        <!-- Filter Toggle Button -->
+        <button 
+            type="button" 
+            onclick="toggleFilters()" 
+            class="w-full flex items-center justify-between mb-3 px-4 py-2 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition-colors duration-200"
+        >
+            <div class="flex items-center">
+                <svg class="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+                </svg>
+                <span class="font-semibold text-gray-700">Filters</span>
+                @if(request()->except(['page', 'per_page']))
+                    <span class="ml-2 px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-medium rounded-full">
+                        Active
+                    </span>
+                @endif
+            </div>
+            <svg id="filter-chevron" class="w-5 h-5 text-gray-600 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+        </button>
+
+        <form method="GET" action="{{ route('trades') }}" id="filter-form" class="hidden">
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 md:gap-4">
                 <!-- Symbol Search -->
                 <div>
@@ -542,7 +564,33 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => message.remove(), 500);
         }, 5000);
     });
+
+    // Check if filters are active and show them automatically
+    const hasActiveFilters = {{ request()->except(['page', 'per_page']) ? 'true' : 'false' }};
+    if (hasActiveFilters) {
+        const filterForm = document.getElementById('filter-form');
+        if (filterForm) {
+            filterForm.classList.remove('hidden');
+            const chevron = document.getElementById('filter-chevron');
+            if (chevron) {
+                chevron.style.transform = 'rotate(180deg)';
+            }
+        }
+    }
 });
+
+function toggleFilters() {
+    const filterForm = document.getElementById('filter-form');
+    const chevron = document.getElementById('filter-chevron');
+    
+    if (filterForm.classList.contains('hidden')) {
+        filterForm.classList.remove('hidden');
+        chevron.style.transform = 'rotate(180deg)';
+    } else {
+        filterForm.classList.add('hidden');
+        chevron.style.transform = 'rotate(0deg)';
+    }
+}
 
 function changePerPage(value) {
     const url = new URL(window.location.href);

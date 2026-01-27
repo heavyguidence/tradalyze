@@ -325,7 +325,7 @@
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 mt-6">
         <div class="px-6 py-5 border-b border-gray-200">
             <h2 class="text-lg font-semibold text-gray-900">Trade Notes</h2>
-            <p class="text-sm text-gray-500 mt-1">Add notes about this trade for future reference</p>
+            <p class="text-sm text-gray-500 mt-1">Add notes about this trade for future reference (supports rich text, images, and formatting)</p>
         </div>
         <div class="px-6 py-5">
             @if(session('success'))
@@ -343,17 +343,103 @@
                 </div>
             @endif
 
-            <form action="{{ route('trades.update', $position) }}" method="POST">
+            <form id="notesForm" action="{{ route('trades.update', $position) }}" method="POST">
                 @csrf
                 @method('PATCH')
                 
                 <div class="mb-4">
-                    <textarea 
-                        name="notes" 
-                        rows="6" 
-                        class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                    <!-- Toolbar -->
+                    <div class="border border-gray-300 rounded-t-lg bg-gray-50 p-2 flex flex-wrap gap-1">
+                        <!-- Text Formatting -->
+                        <button type="button" onclick="formatText('bold')" class="p-2 hover:bg-gray-200 rounded transition" title="Bold">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M11 5H7v10h4c2.21 0 4-1.79 4-4s-1.79-4-4-4zm-2 8v-2h2c1.1 0 2 .9 2 2s-.9 2-2 2H9zm0-4V7h2c1.1 0 2 .9 2 2s-.9 2-2 2H9z"/>
+                            </svg>
+                        </button>
+                        
+                        <button type="button" onclick="formatText('italic')" class="p-2 hover:bg-gray-200 rounded transition" title="Italic">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 4H8l-2 12h2l2-12zm2 0h2l-2 12h-2l2-12z"/>
+                            </svg>
+                        </button>
+                        
+                        <button type="button" onclick="formatText('underline')" class="p-2 hover:bg-gray-200 rounded transition" title="Underline">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 16c-2.76 0-5-2.24-5-5V4h2v7c0 1.66 1.34 3 3 3s3-1.34 3-3V4h2v7c0 2.76-2.24 5-5 5zm-6 2h12v2H4v-2z"/>
+                            </svg>
+                        </button>
+                        
+                        <div class="w-px bg-gray-300 mx-1"></div>
+                        
+                        <!-- Headings -->
+                        <button type="button" onclick="formatText('formatBlock', 'h1')" class="px-3 py-2 hover:bg-gray-200 rounded transition font-bold" title="Heading 1">
+                            H1
+                        </button>
+                        
+                        <button type="button" onclick="formatText('formatBlock', 'h2')" class="px-3 py-2 hover:bg-gray-200 rounded transition font-semibold" title="Heading 2">
+                            H2
+                        </button>
+                        
+                        <button type="button" onclick="formatText('formatBlock', 'h3')" class="px-3 py-2 hover:bg-gray-200 rounded transition font-medium" title="Heading 3">
+                            H3
+                        </button>
+                        
+                        <div class="w-px bg-gray-300 mx-1"></div>
+                        
+                        <!-- Lists -->
+                        <button type="button" onclick="formatText('insertUnorderedList')" class="p-2 hover:bg-gray-200 rounded transition" title="Bullet List">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M3 7h2V5H3v2zm0 4h2V9H3v2zm0 4h2v-2H3v2zm4-8v2h10V7H7zm0 4h10V9H7v2zm0 4h10v-2H7v2z"/>
+                            </svg>
+                        </button>
+                        
+                        <button type="button" onclick="formatText('insertOrderedList')" class="p-2 hover:bg-gray-200 rounded transition" title="Numbered List">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M5 15H3v-2h2v2zm0-4H3V9h2v2zm0-4H3V5h2v2zm4 8h10v-2H9v2zm0-4h10V9H9v2zm0-4h10V5H9v2z"/>
+                            </svg>
+                        </button>
+                        
+                        <div class="w-px bg-gray-300 mx-1"></div>
+                        
+                        <!-- Alignment -->
+                        <button type="button" onclick="formatText('justifyLeft')" class="p-2 hover:bg-gray-200 rounded transition" title="Align Left">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M3 5h14v2H3V5zm0 4h10v2H3V9zm0 4h14v2H3v-2zm0 4h10v2H3v-2z"/>
+                            </svg>
+                        </button>
+                        
+                        <button type="button" onclick="formatText('justifyCenter')" class="p-2 hover:bg-gray-200 rounded transition" title="Align Center">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M3 5h14v2H3V5zm2 4h10v2H5V9zm-2 4h14v2H3v-2zm2 4h10v2H5v-2z"/>
+                            </svg>
+                        </button>
+                        
+                        <button type="button" onclick="formatText('justifyRight')" class="p-2 hover:bg-gray-200 rounded transition" title="Align Right">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M3 5h14v2H3V5zm4 4h10v2H7V9zm-4 4h14v2H3v-2zm4 4h10v2H7v-2z"/>
+                            </svg>
+                        </button>
+                        
+                        <div class="w-px bg-gray-300 mx-1"></div>
+                        
+                        <!-- Clear Formatting -->
+                        <button type="button" onclick="formatText('removeFormat')" class="p-2 hover:bg-gray-200 rounded transition" title="Clear Formatting">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M18.59 7L12 13.59 5.41 7 4 8.41l8 8 8-8L18.59 7z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <!-- Editable Content Area -->
+                    <div 
+                        id="notesEditor" 
+                        contenteditable="true" 
+                        class="border border-gray-300 border-t-0 rounded-b-lg p-6 min-h-[300px] max-h-[500px] overflow-y-auto focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
                         placeholder="Add notes about this trade... (strategy, emotions, lessons learned, etc.)"
-                    >{{ old('notes', $position->notes) }}</textarea>
+                    >{!! old('notes', $position->notes) !!}</div>
+                    
+                    <input type="hidden" name="notes" id="notesInput">
+                    
                     @error('notes')
                         <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                     @enderror
@@ -490,5 +576,80 @@
             alertDiv.remove();
         }, 3000);
     }
+
+    // Rich Text Editor Functions
+    function formatText(command, value = null) {
+        document.execCommand(command, false, value);
+        document.getElementById('notesEditor').focus();
+    }
+
+    // Handle form submission for notes
+    document.getElementById('notesForm').addEventListener('submit', function(e) {
+        const editorContent = document.getElementById('notesEditor').innerHTML;
+        document.getElementById('notesInput').value = editorContent;
+    });
 </script>
+
+<style>
+    /* Rich Text Editor Placeholder */
+    #notesEditor:empty:before {
+        content: attr(placeholder);
+        color: #9CA3AF;
+        cursor: text;
+    }
+
+    /* Rich Text Editor Content Styling */
+    #notesEditor h1 {
+        font-size: 2em;
+        font-weight: bold;
+        margin: 0.67em 0;
+    }
+
+    #notesEditor h2 {
+        font-size: 1.5em;
+        font-weight: bold;
+        margin: 0.75em 0;
+    }
+
+    #notesEditor h3 {
+        font-size: 1.17em;
+        font-weight: bold;
+        margin: 0.83em 0;
+    }
+
+    #notesEditor ul, #notesEditor ol {
+        margin: 1em 0;
+        padding-left: 2em;
+    }
+
+    #notesEditor ul {
+        list-style-type: disc;
+    }
+
+    #notesEditor ol {
+        list-style-type: decimal;
+    }
+
+    #notesEditor p {
+        margin: 0.5em 0;
+    }
+
+    #notesEditor img {
+        max-width: 100%;
+        height: auto;
+        margin: 1em 0;
+    }
+
+    #notesEditor strong {
+        font-weight: bold;
+    }
+
+    #notesEditor em {
+        font-style: italic;
+    }
+
+    #notesEditor u {
+        text-decoration: underline;
+    }
+</style>
 @endsection

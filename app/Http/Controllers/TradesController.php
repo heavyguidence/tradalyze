@@ -174,7 +174,7 @@ class TradesController extends Controller
         }
 
         $request->validate([
-            'notes' => 'nullable|string|max:5000',
+            'notes' => 'nullable|string',
         ]);
 
         $position->update([

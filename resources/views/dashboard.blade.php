@@ -196,6 +196,43 @@
     </div>
 </div>
 
+<!-- Account Balance History Chart (Full Width) -->
+<div class="mb-8">
+    <div class="bg-gradient-to-br from-indigo-50 to-blue-100 rounded-xl shadow-lg p-6">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h3 class="text-2xl font-bold text-gray-900">Account Balance History</h3>
+                <p class="text-sm text-gray-600 mt-1">Track your account growth over time including P&L, deposits, and withdrawals</p>
+            </div>
+            <div class="text-right">
+                <p class="text-xs text-gray-600 uppercase tracking-wide mb-1">Current Balance</p>
+                <p class="text-3xl font-bold {{ $accountBalance >= 0 ? 'text-emerald-600' : 'text-red-600' }}">
+                    ${{ number_format($accountBalance, 2) }}
+                </p>
+            </div>
+        </div>
+        
+        <!-- Line Chart Container -->
+        <div class="relative bg-white rounded-lg p-4" style="height: 400px;">
+            <canvas id="accountBalanceChart"></canvas>
+        </div>
+        
+        <!-- Legend -->
+        <div class="mt-4 flex justify-center gap-6 text-sm">
+            <div class="flex items-center">
+                <div class="w-4 h-4 rounded mr-2" style="background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);"></div>
+                <span class="text-gray-700 font-medium">Account Balance</span>
+            </div>
+            @if($balanceHistory['startingBalance'] > 0)
+                <div class="flex items-center">
+                    <div class="w-4 h-4 bg-gray-400 rounded mr-2"></div>
+                    <span class="text-gray-700">Starting: ${{ number_format($balanceHistory['startingBalance'], 2) }}</span>
+                </div>
+            @endif
+        </div>
+    </div>
+</div>
+
 <!-- Main Content Grid -->
 <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
     <!-- Daily P&L Bar Chart for Current Month -->
@@ -293,6 +330,123 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Account Balance History Chart
+    const balanceHistory = @json($balanceHistory);
+    
+    if (balanceHistory && balanceHistory.labels.length > 0) {
+        const balanceCtx = document.getElementById('accountBalanceChart').getContext('2d');
+        
+        // Create gradient for the line
+        const balanceGradient = balanceCtx.createLinearGradient(0, 0, 0, 400);
+        balanceGradient.addColorStop(0, 'rgba(99, 102, 241, 0.3)');
+        balanceGradient.addColorStop(1, 'rgba(99, 102, 241, 0.05)');
+        
+        const accountBalanceChart = new Chart(balanceCtx, {
+            type: 'line',
+            data: {
+                labels: balanceHistory.labels,
+                datasets: [{
+                    label: 'Account Balance',
+                    data: balanceHistory.data,
+                    borderColor: 'rgb(99, 102, 241)',
+                    backgroundColor: balanceGradient,
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0,
+                    pointHoverRadius: 6,
+                    pointHoverBackgroundColor: 'rgb(99, 102, 241)',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                scales: {
+                    y: {
+                        beginAtZero: balanceHistory.startingBalance === 0,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value.toLocaleString();
+                            },
+                            font: {
+                                size: 12
+                            },
+                            color: '#6b7280'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            font: {
+                                size: 11
+                            },
+                            color: '#6b7280',
+                            maxRotation: 45,
+                            minRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 20,
+                            callback: function(value, index) {
+                                const date = this.getLabelForValue(value);
+                                // Show only month/day for cleaner labels
+                                const parts = date.split('-');
+                                return parts[1] + '/' + parts[2];
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                const prevValue = context.dataIndex > 0 ? context.dataset.data[context.dataIndex - 1] : balanceHistory.startingBalance;
+                                const change = value - prevValue;
+                                const changeStr = change >= 0 ? '+$' + change.toFixed(2) : '-$' + Math.abs(change).toFixed(2);
+                                
+                                return [
+                                    'Balance: $' + value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
+                                    'Change: ' + changeStr
+                                ];
+                            },
+                            title: function(context) {
+                                return context[0].label;
+                            }
+                        },
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        padding: 12,
+                        displayColors: false,
+                        bodyFont: {
+                            size: 13
+                        },
+                        titleFont: {
+                            size: 12,
+                            weight: 'bold'
+                        }
+                    }
+                },
+                animation: {
+                    duration: 1000,
+                    easing: 'easeInOutQuart'
+                }
+            }
+        });
+    }
+    
     // Daily P&L Bar Chart
     const chartLabels = @json($chartLabels);
     const chartData = @json($chartData);

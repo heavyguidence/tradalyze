@@ -95,6 +95,139 @@ class DashboardController extends Controller
         ->limit(5)
         ->get();
         
-        return view('dashboard', compact('totalTrades', 'winningTrades', 'losingTrades', 'winRate', 'netProfit', 'netLoss', 'totalCommissions', 'accountBalance', 'dailyPnL', 'recentTrades', 'chartLabels', 'chartData'));
+        // Calculate Account Balance History
+        $balanceHistory = $this->calculateBalanceHistory();
+        
+        return view('dashboard', compact('totalTrades', 'winningTrades', 'losingTrades', 'winRate', 'netProfit', 'netLoss', 'totalCommissions', 'accountBalance', 'dailyPnL', 'recentTrades', 'chartLabels', 'chartData', 'balanceHistory'));
+    }
+    
+    /**
+     * Calculate daily account balance history
+     */
+    private function calculateBalanceHistory()
+    {
+        // Get initial balance with date
+        $initialBalance = Balance::where('user_id', auth()->id())
+            ->where('type', 'initial')
+            ->first();
+        
+        // Get all deposits and withdrawals
+        $balanceTransactions = Balance::where('user_id', auth()->id())
+            ->whereIn('type', ['deposit', 'withdrawal'])
+            ->orderBy('date')
+            ->get();
+        
+        // Get all closed positions with their P&L
+        $closedPositions = Position::whereHas('instrument', function($query) {
+            $query->where('user_id', auth()->id());
+        })
+        ->with('instrument')
+        ->whereNotNull('close_datetime')
+        ->whereNotNull('realized_pnl')
+        ->orderBy('close_datetime')
+        ->get();
+        
+        // Get total fees per instrument for closed positions
+        $instrumentIds = $closedPositions->pluck('instrument_id')->unique();
+        $feesByInstrument = \App\Models\Fill::whereIn('instrument_id', $instrumentIds)
+            ->selectRaw('instrument_id, SUM(fees) as total_fees')
+            ->groupBy('instrument_id')
+            ->pluck('total_fees', 'instrument_id');
+        
+        // Combine all transactions into a timeline
+        $timeline = collect();
+        
+        // Starting point
+        $startDate = null;
+        $startingBalance = 0;
+        
+        if ($initialBalance) {
+            $startDate = $initialBalance->date;
+            $startingBalance = $initialBalance->amount;
+            $timeline->push([
+                'date' => $initialBalance->date->format('Y-m-d'),
+                'type' => 'initial',
+                'amount' => $initialBalance->amount,
+                'description' => 'Initial Balance'
+            ]);
+        } else {
+            // If no initial balance, start from first transaction
+            $firstPosition = $closedPositions->first();
+            $firstTransaction = $balanceTransactions->first();
+            
+            if ($firstPosition && $firstTransaction) {
+                $startDate = $firstPosition->close_datetime < $firstTransaction->date 
+                    ? $firstPosition->close_datetime 
+                    : $firstTransaction->date;
+            } elseif ($firstPosition) {
+                $startDate = $firstPosition->close_datetime;
+            } elseif ($firstTransaction) {
+                $startDate = $firstTransaction->date;
+            } else {
+                $startDate = now();
+            }
+            
+            $startingBalance = 0;
+        }
+        
+        // Add deposits and withdrawals
+        foreach ($balanceTransactions as $transaction) {
+            $amount = $transaction->type === 'withdrawal' ? -$transaction->amount : $transaction->amount;
+            $timeline->push([
+                'date' => $transaction->date->format('Y-m-d'),
+                'type' => $transaction->type,
+                'amount' => $amount,
+                'description' => $transaction->description ?? ucfirst($transaction->type)
+            ]);
+        }
+        
+        // Add P&L from closed positions (already includes fees in realized_pnl calculation)
+        foreach ($closedPositions as $position) {
+            $timeline->push([
+                'date' => $position->close_datetime->format('Y-m-d'),
+                'type' => 'trade',
+                'amount' => $position->realized_pnl,
+                'description' => $position->instrument->symbol . ' Trade'
+            ]);
+        }
+        
+        // Sort timeline by date
+        $timeline = $timeline->sortBy('date')->values();
+        
+        // Calculate running balance for each day
+        $balanceByDay = collect();
+        $runningBalance = $startingBalance;
+        $currentDate = \Carbon\Carbon::parse($startDate);
+        $today = now();
+        
+        // Group timeline by date
+        $transactionsByDate = $timeline->groupBy('date');
+        
+        // Generate daily balances
+        while ($currentDate->lte($today)) {
+            $dateStr = $currentDate->format('Y-m-d');
+            
+            // Add transactions for this date
+            if (isset($transactionsByDate[$dateStr])) {
+                foreach ($transactionsByDate[$dateStr] as $transaction) {
+                    if ($transaction['type'] !== 'initial') {
+                        $runningBalance += $transaction['amount'];
+                    }
+                }
+            }
+            
+            $balanceByDay->push([
+                'date' => $dateStr,
+                'balance' => round($runningBalance, 2)
+            ]);
+            
+            $currentDate->addDay();
+        }
+        
+        return [
+            'labels' => $balanceByDay->pluck('date')->toArray(),
+            'data' => $balanceByDay->pluck('balance')->toArray(),
+            'startingBalance' => $startingBalance
+        ];
     }
 }

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Position extends Model
 {
@@ -29,6 +30,11 @@ class Position extends Model
     public function instrument(): BelongsTo
     {
         return $this->belongsTo(Instrument::class);
+    }
+
+    public function fills(): HasManyThrough
+    {
+        return $this->hasManyThrough(Fill::class, Instrument::class, 'id', 'instrument_id', 'instrument_id', 'id');
     }
 
     public function tags(): BelongsToMany

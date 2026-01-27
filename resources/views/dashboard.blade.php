@@ -196,39 +196,73 @@
     </div>
 </div>
 
-<!-- Account Balance History Chart (Full Width) -->
-<div class="mb-8">
+<!-- Account Balance & P&L History Charts (50/50 Split) -->
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+    <!-- Account Balance History Chart -->
     <div class="bg-gradient-to-br from-indigo-50 to-blue-100 rounded-xl shadow-lg p-6">
-        <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center justify-between mb-4">
             <div>
-                <h3 class="text-2xl font-bold text-gray-900">Account Balance History</h3>
-                <p class="text-sm text-gray-600 mt-1">Track your account growth over time including P&L, deposits, and withdrawals</p>
+                <h3 class="text-xl font-bold text-gray-900">Account Balance History</h3>
+                <p class="text-xs text-gray-600 mt-1">Track your account growth over time</p>
             </div>
             <div class="text-right">
-                <p class="text-xs text-gray-600 uppercase tracking-wide mb-1">Current Balance</p>
-                <p class="text-3xl font-bold {{ $accountBalance >= 0 ? 'text-emerald-600' : 'text-red-600' }}">
+                <p class="text-xs text-gray-600 uppercase tracking-wide mb-1">Current</p>
+                <p class="text-2xl font-bold {{ $accountBalance >= 0 ? 'text-emerald-600' : 'text-red-600' }}">
                     ${{ number_format($accountBalance, 2) }}
                 </p>
             </div>
         </div>
         
         <!-- Line Chart Container -->
-        <div class="relative bg-white rounded-lg p-4" style="height: 400px;">
+        <div class="relative bg-white rounded-lg p-4" style="height: 350px;">
             <canvas id="accountBalanceChart"></canvas>
         </div>
         
         <!-- Legend -->
-        <div class="mt-4 flex justify-center gap-6 text-sm">
+        <div class="mt-4 flex justify-center gap-4 text-xs">
             <div class="flex items-center">
-                <div class="w-4 h-4 rounded mr-2" style="background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);"></div>
-                <span class="text-gray-700 font-medium">Account Balance</span>
+                <div class="w-3 h-3 rounded mr-2" style="background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);"></div>
+                <span class="text-gray-700 font-medium">Balance</span>
             </div>
             @if($balanceHistory['startingBalance'] > 0)
                 <div class="flex items-center">
-                    <div class="w-4 h-4 bg-gray-400 rounded mr-2"></div>
-                    <span class="text-gray-700">Starting: ${{ number_format($balanceHistory['startingBalance'], 2) }}</span>
+                    <div class="w-3 h-3 bg-gray-400 rounded mr-2"></div>
+                    <span class="text-gray-700">Start: ${{ number_format($balanceHistory['startingBalance'], 2) }}</span>
                 </div>
             @endif
+        </div>
+    </div>
+    
+    <!-- Net P&L History Chart -->
+    <div class="bg-gradient-to-br from-emerald-50 to-teal-100 rounded-xl shadow-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h3 class="text-xl font-bold text-gray-900">Net Profit & Loss</h3>
+                <p class="text-xs text-gray-600 mt-1">Cumulative profit vs loss from trades</p>
+            </div>
+            <div class="text-right">
+                <p class="text-xs text-gray-600 uppercase tracking-wide mb-1">Net</p>
+                <p class="text-2xl font-bold {{ ($netProfit - $netLoss) >= 0 ? 'text-emerald-600' : 'text-red-600' }}">
+                    ${{ number_format($netProfit - $netLoss, 2) }}
+                </p>
+            </div>
+        </div>
+        
+        <!-- Line Chart Container -->
+        <div class="relative bg-white rounded-lg p-4" style="height: 350px;">
+            <canvas id="netPnLChart"></canvas>
+        </div>
+        
+        <!-- Legend -->
+        <div class="mt-4 flex justify-center gap-4 text-xs">
+            <div class="flex items-center">
+                <div class="w-3 h-3 bg-emerald-500 rounded mr-2"></div>
+                <span class="text-gray-700 font-medium">Profit: ${{ number_format($netProfit, 2) }}</span>
+            </div>
+            <div class="flex items-center">
+                <div class="w-3 h-3 bg-red-500 rounded mr-2"></div>
+                <span class="text-gray-700 font-medium">Loss: ${{ number_format($netLoss, 2) }}</span>
+            </div>
         </div>
     </div>
 </div>
@@ -435,6 +469,146 @@ document.addEventListener('DOMContentLoaded', function() {
                         },
                         titleFont: {
                             size: 12,
+                            weight: 'bold'
+                        }
+                    }
+                },
+                animation: {
+                    duration: 1000,
+                    easing: 'easeInOutQuart'
+                }
+            }
+        });
+    }
+    
+    // Net P&L History Chart
+    const pnlHistory = @json($pnlHistory);
+    
+    if (pnlHistory && pnlHistory.labels.length > 0) {
+        const pnlCtx = document.getElementById('netPnLChart').getContext('2d');
+        
+        // Create gradients
+        const profitGradient = pnlCtx.createLinearGradient(0, 0, 0, 350);
+        profitGradient.addColorStop(0, 'rgba(16, 185, 129, 0.3)');
+        profitGradient.addColorStop(1, 'rgba(16, 185, 129, 0.05)');
+        
+        const lossGradient = pnlCtx.createLinearGradient(0, 0, 0, 350);
+        lossGradient.addColorStop(0, 'rgba(239, 68, 68, 0.3)');
+        lossGradient.addColorStop(1, 'rgba(239, 68, 68, 0.05)');
+        
+        const netPnLChart = new Chart(pnlCtx, {
+            type: 'line',
+            data: {
+                labels: pnlHistory.labels,
+                datasets: [
+                    {
+                        label: 'Cumulative Profit',
+                        data: pnlHistory.profitData,
+                        borderColor: 'rgb(16, 185, 129)',
+                        backgroundColor: profitGradient,
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
+                        pointHoverBackgroundColor: 'rgb(16, 185, 129)',
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 2,
+                    },
+                    {
+                        label: 'Cumulative Loss',
+                        data: pnlHistory.lossData,
+                        borderColor: 'rgb(239, 68, 68)',
+                        backgroundColor: lossGradient,
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
+                        pointHoverBackgroundColor: 'rgb(239, 68, 68)',
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 2,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value.toLocaleString();
+                            },
+                            font: {
+                                size: 12
+                            },
+                            color: '#6b7280'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            font: {
+                                size: 11
+                            },
+                            color: '#6b7280',
+                            maxRotation: 45,
+                            minRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 20,
+                            callback: function(value, index) {
+                                const date = this.getLabelForValue(value);
+                                const parts = date.split('-');
+                                return parts[1] + '/' + parts[2];
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                const label = context.dataset.label;
+                                return label + ': $' + value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                            },
+                            title: function(context) {
+                                return context[0].label;
+                            },
+                            footer: function(tooltipItems) {
+                                const profit = tooltipItems[0].parsed.y;
+                                const loss = tooltipItems[1] ? tooltipItems[1].parsed.y : 0;
+                                const net = profit - loss;
+                                return 'Net P&L: ' + (net >= 0 ? '+' : '') + '$' + net.toFixed(2);
+                            }
+                        },
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        padding: 12,
+                        displayColors: true,
+                        bodyFont: {
+                            size: 13
+                        },
+                        titleFont: {
+                            size: 12,
+                            weight: 'bold'
+                        },
+                        footerFont: {
+                            size: 13,
                             weight: 'bold'
                         }
                     }

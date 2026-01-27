@@ -98,7 +98,10 @@ class DashboardController extends Controller
         // Calculate Account Balance History
         $balanceHistory = $this->calculateBalanceHistory();
         
-        return view('dashboard', compact('totalTrades', 'winningTrades', 'losingTrades', 'winRate', 'netProfit', 'netLoss', 'totalCommissions', 'accountBalance', 'dailyPnL', 'recentTrades', 'chartLabels', 'chartData', 'balanceHistory'));
+        // Calculate Net P&L History
+        $pnlHistory = $this->calculatePnLHistory();
+        
+        return view('dashboard', compact('totalTrades', 'winningTrades', 'losingTrades', 'winRate', 'netProfit', 'netLoss', 'totalCommissions', 'accountBalance', 'dailyPnL', 'recentTrades', 'chartLabels', 'chartData', 'balanceHistory', 'pnlHistory'));
     }
     
     /**
@@ -228,6 +231,75 @@ class DashboardController extends Controller
             'labels' => $balanceByDay->pluck('date')->toArray(),
             'data' => $balanceByDay->pluck('balance')->toArray(),
             'startingBalance' => $startingBalance
+        ];
+    }
+    
+    /**
+     * Calculate cumulative Net P&L history (Profit and Loss only from trades)
+     */
+    private function calculatePnLHistory()
+    {
+        // Get all closed positions with their P&L
+        $closedPositions = Position::whereHas('instrument', function($query) {
+            $query->where('user_id', auth()->id());
+        })
+        ->with('instrument')
+        ->whereNotNull('close_datetime')
+        ->whereNotNull('realized_pnl')
+        ->orderBy('close_datetime')
+        ->get();
+        
+        if ($closedPositions->isEmpty()) {
+            return [
+                'labels' => [],
+                'profitData' => [],
+                'lossData' => []
+            ];
+        }
+        
+        // Group P&L by date
+        $pnlByDate = collect();
+        $cumulativeProfit = 0;
+        $cumulativeLoss = 0;
+        
+        $startDate = $closedPositions->first()->close_datetime;
+        $today = now();
+        $currentDate = \Carbon\Carbon::parse($startDate);
+        
+        // Group positions by date
+        $positionsByDate = $closedPositions->groupBy(function($position) {
+            return $position->close_datetime->format('Y-m-d');
+        });
+        
+        // Calculate cumulative profit and loss for each day
+        while ($currentDate->lte($today)) {
+            $dateStr = $currentDate->format('Y-m-d');
+            
+            // Add P&L from positions closed on this date
+            if (isset($positionsByDate[$dateStr])) {
+                foreach ($positionsByDate[$dateStr] as $position) {
+                    $pnl = $position->realized_pnl;
+                    if ($pnl > 0) {
+                        $cumulativeProfit += $pnl;
+                    } elseif ($pnl < 0) {
+                        $cumulativeLoss += abs($pnl);
+                    }
+                }
+            }
+            
+            $pnlByDate->push([
+                'date' => $dateStr,
+                'profit' => round($cumulativeProfit, 2),
+                'loss' => round($cumulativeLoss, 2)
+            ]);
+            
+            $currentDate->addDay();
+        }
+        
+        return [
+            'labels' => $pnlByDate->pluck('date')->toArray(),
+            'profitData' => $pnlByDate->pluck('profit')->toArray(),
+            'lossData' => $pnlByDate->pluck('loss')->toArray()
         ];
     }
 }

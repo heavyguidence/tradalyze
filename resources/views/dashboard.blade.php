@@ -748,7 +748,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const pnlDiv = document.createElement('div');
                 pnlDiv.className = 'pnl-amount';
                 pnlDiv.style.color = pnl > 0 ? '#10b981' : pnl < 0 ? '#f43f5e' : '#6b7280';
-                pnlDiv.textContent = (pnl >= 0 ? '+' : '') + '$' + Math.round(pnl);
+                pnlDiv.textContent = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
                 info.el.querySelector('.fc-daygrid-day-frame').appendChild(pnlDiv);
             }
         }

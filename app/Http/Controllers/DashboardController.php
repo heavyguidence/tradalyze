@@ -28,7 +28,7 @@ class DashboardController extends Controller
         $netProfit = $closedPositions->where('realized_pnl', '>', 0)->sum('realized_pnl');
         $netLoss = abs($closedPositions->where('realized_pnl', '<', 0)->sum('realized_pnl'));
         
-        // Calculate total commissions from all fills for user's instruments
+        // Calculate total commissions from all fills for user's instruments (for display purposes)
         $totalCommissions = \App\Models\Fill::whereHas('instrument', function($query) {
             $query->where('user_id', auth()->id());
         })->sum('fees');
@@ -46,8 +46,9 @@ class DashboardController extends Controller
             ->where('type', 'withdrawal')
             ->sum('amount');
         
-        // Account Balance = Initial + Deposits + Net Profit - (Net Loss + Commissions + Withdrawals)
-        $accountBalance = $initialBalance + $deposits + $netProfit - ($netLoss + $totalCommissions + $withdrawals);
+        // Account Balance = Initial + Deposits + Net Profit - Net Loss - Withdrawals
+        // Note: Fees are already included in realized_pnl calculation, so we don't subtract them separately
+        $accountBalance = $initialBalance + $deposits + $netProfit - $netLoss - $withdrawals;
         
         // Calculate daily P&L for calendar widget
         $dailyPnL = Position::whereHas('instrument', function($query) {

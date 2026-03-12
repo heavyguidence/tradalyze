@@ -3,13 +3,16 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Models\DiaryEntry;
 use App\Models\Position;
+use App\Models\PositionScreenshot;
 use App\Models\Instrument;
 use App\Models\Fill;
 use App\Models\TradeTag;
 use App\Services\FifoPositionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class TradesController extends Controller
 {
@@ -126,8 +129,14 @@ class TradesController extends Controller
         $userTags = TradeTag::where('user_id', auth()->id())
             ->orderBy('name')
             ->get();
-        
-        return view('trades', compact('positions', 'userTags'));
+
+        // Map of date-string => DiaryEntry for day-header indicators
+        $diaryEntryByDate = DiaryEntry::where('user_id', auth()->id())
+            ->whereNotNull('entry_date')
+            ->get()
+            ->keyBy(fn($e) => $e->entry_date->format('Y-m-d'));
+
+        return view('trades', compact('positions', 'userTags', 'diaryEntryByDate'));
     }
 
     public function create()
@@ -153,10 +162,10 @@ class TradesController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
-        // Load the instrument and all fills for this instrument
+        // Load the instrument, fills, tags, and screenshots
         $position->load(['instrument.fills' => function($query) use ($position) {
             $query->orderBy('datetime', 'asc');
-        }, 'tags']);
+        }, 'tags', 'screenshots']);
         
         // Get all available tags for the user
         $availableTags = TradeTag::where('user_id', auth()->id())
@@ -802,5 +811,45 @@ class TradesController extends Controller
                 'message' => 'Error during auto import: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    public function storeScreenshot(Request $request, Position $position)
+    {
+        if ($position->instrument->user_id !== auth()->id()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $request->validate(['screenshot' => 'required|image|max:10240']);
+
+        $path       = $request->file('screenshot')->store("position-screenshots/{$position->id}", 'public');
+        $screenshot = $position->screenshots()->create([
+            'path'          => $path,
+            'original_name' => $request->file('screenshot')->getClientOriginalName(),
+        ]);
+
+        return response()->json([
+            'success'    => true,
+            'screenshot' => [
+                'id'   => $screenshot->id,
+                'url'  => Storage::disk('public')->url($path),
+                'name' => $screenshot->original_name,
+            ],
+        ]);
+    }
+
+    public function destroyScreenshot(Position $position, PositionScreenshot $screenshot)
+    {
+        if ($position->instrument->user_id !== auth()->id()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        if ($screenshot->position_id !== $position->id) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        Storage::disk('public')->delete($screenshot->path);
+        $screenshot->delete();
+
+        return response()->json(['success' => true]);
     }
 }

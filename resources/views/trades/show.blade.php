@@ -321,6 +321,56 @@
         </div>
     </div>
 
+    <!-- Screenshots Section -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 mt-6">
+        <div class="px-6 py-5 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">Trade Screenshots</h2>
+            <p class="text-sm text-gray-500 mt-1">Attach chart screenshots or other images to this trade</p>
+        </div>
+        <div class="px-6 py-5">
+            <!-- Upload form -->
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Upload Screenshot</label>
+                <div class="flex items-center gap-3">
+                    <input type="file" id="screenshotInput" accept="image/*" class="block text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0
+                        file:text-sm file:font-medium file:bg-orange-50 file:text-orange-700
+                        hover:file:bg-orange-100 cursor-pointer">
+                    <button type="button" onclick="uploadScreenshot()" id="screenshotUploadBtn"
+                        class="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50">
+                        Upload
+                    </button>
+                </div>
+                <p id="screenshotUploadStatus" class="mt-2 text-sm hidden"></p>
+            </div>
+            <!-- Gallery -->
+            <div id="screenshotGallery" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                @forelse($position->screenshots as $shot)
+                <div class="relative group" id="shot-{{ $shot->id }}">
+                    <a href="{{ $shot->url }}" target="_blank">
+                        <img src="{{ $shot->url }}"
+                             alt="{{ $shot->original_name ?? 'Screenshot' }}"
+                             class="w-full h-36 object-cover rounded-lg border border-gray-200 hover:border-orange-400 transition-colors">
+                    </a>
+                    <button type="button"
+                            onclick="deleteScreenshot({{ $shot->id }})"
+                            title="Delete screenshot"
+                            class="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                    @if($shot->original_name)
+                    <p class="mt-1 text-xs text-gray-500 truncate">{{ $shot->original_name }}</p>
+                    @endif
+                </div>
+                @empty
+                <p id="noScreenshots" class="col-span-full text-sm text-gray-400">No screenshots uploaded yet.</p>
+                @endforelse
+            </div>
+        </div>
+    </div>
+
     <!-- Notes Section -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 mt-6">
         <div class="px-6 py-5 border-b border-gray-200">
@@ -588,6 +638,84 @@
         const editorContent = document.getElementById('notesEditor').innerHTML;
         document.getElementById('notesInput').value = editorContent;
     });
+
+    // Screenshot upload
+    async function uploadScreenshot() {
+        const input = document.getElementById('screenshotInput');
+        const status = document.getElementById('screenshotUploadStatus');
+        const btn = document.getElementById('screenshotUploadBtn');
+        if (!input.files.length) {
+            status.textContent = 'Please select a file first.';
+            status.className = 'mt-2 text-sm text-red-600';
+            status.classList.remove('hidden');
+            return;
+        }
+        btn.disabled = true;
+        status.textContent = 'Uploading…';
+        status.className = 'mt-2 text-sm text-gray-500';
+        status.classList.remove('hidden');
+        const fd = new FormData();
+        fd.append('screenshot', input.files[0]);
+        fd.append('_token', document.querySelector('meta[name="csrf-token"]').content);
+        try {
+            const res = await fetch('{{ route('trades.screenshots.store', $position) }}', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.success) {
+                const s = data.screenshot;
+                const noMsg = document.getElementById('noScreenshots');
+                if (noMsg) noMsg.remove();
+                const div = document.createElement('div');
+                div.id = `shot-${s.id}`;
+                div.className = 'relative group';
+                div.innerHTML = `
+                    <a href="${s.url}" target="_blank">
+                        <img src="${s.url}" alt="${s.name ?? ''}" class="w-full h-36 object-cover rounded-lg border border-gray-200 hover:border-orange-400 transition-colors">
+                    </a>
+                    <button type="button" onclick="deleteScreenshot(${s.id})" title="Delete screenshot"
+                        class="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                    ${s.name ? `<p class="mt-1 text-xs text-gray-500 truncate">${s.name}</p>` : ''}
+                `;
+                document.getElementById('screenshotGallery').appendChild(div);
+                input.value = '';
+                status.textContent = 'Uploaded successfully!';
+                status.className = 'mt-2 text-sm text-green-600';
+                setTimeout(() => status.classList.add('hidden'), 3000);
+            } else {
+                status.textContent = data.message ?? 'Upload failed.';
+                status.className = 'mt-2 text-sm text-red-600';
+            }
+        } catch {
+            status.textContent = 'Upload failed. Please try again.';
+            status.className = 'mt-2 text-sm text-red-600';
+        }
+        btn.disabled = false;
+    }
+
+    // Screenshot delete
+    async function deleteScreenshot(id) {
+        if (!confirm('Delete this screenshot?')) return;
+        try {
+            const res = await fetch(`/trades/{{ $position->id }}/screenshots/${id}`, {
+                method: 'DELETE',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
+            });
+            const data = await res.json();
+            if (data.success) {
+                const el = document.getElementById(`shot-${id}`);
+                if (el) el.remove();
+                const gallery = document.getElementById('screenshotGallery');
+                if (!gallery.querySelector('.relative')) {
+                    gallery.innerHTML = '<p id="noScreenshots" class="col-span-full text-sm text-gray-400">No screenshots uploaded yet.</p>';
+                }
+            }
+        } catch {
+            alert('Failed to delete screenshot.');
+        }
+    }
 </script>
 
 <style>

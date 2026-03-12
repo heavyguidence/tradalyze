@@ -23,6 +23,9 @@ if [ "$DB_CONNECTION" = "sqlite" ]; then
     chmod -R 775 /var/www/html/database
 fi
 
+# Create public storage symlink for uploaded files
+php artisan storage:link --force 2>/dev/null || true
+
 # Run migrations automatically if DB is empty
 php artisan migrate --force 2>/dev/null || true
 

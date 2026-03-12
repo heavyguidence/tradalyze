@@ -43,12 +43,20 @@ class FifoPositionService
             // Create open positions for remaining buy fills in queue
             foreach ($buyQueue as $queueItem) {
                 if ($queueItem['remaining_quantity'] > 0) {
+                    $openFill = $queueItem['fill'];
+                    $openQty  = $queueItem['remaining_quantity'];
+                    // Proportional fees for the remaining (unsold) quantity
+                    $openFees = $openFill->quantity > 0
+                        ? ($openFill->fees / $openFill->quantity) * $openQty
+                        : 0;
+
                     Position::create([
                         'instrument_id' => $instrument->id,
-                        'open_datetime' => $queueItem['fill']->datetime,
+                        'open_datetime' => $openFill->datetime,
                         'close_datetime' => null,
-                        'quantity' => $queueItem['remaining_quantity'],
-                        'cost_basis' => $queueItem['fill']->price,
+                        'quantity' => $openQty,
+                        // Total entry cost: price * qty * multiplier + fees
+                        'cost_basis' => ($openFill->price * $instrument->multiplier * $openQty) + $openFees,
                         'realized_pnl' => null,
                     ]);
                 }
@@ -92,22 +100,27 @@ class FifoPositionService
             $pnl = (($sellPrice - $buyPrice) * $multiplier * $matchQty) - $totalFees;
             
             // Create closed position
+            // cost_basis stores total entry cost (price * qty * multiplier + fees),
+            // matching the format used by manually-entered trades
             Position::create([
                 'instrument_id' => $instrument->id,
                 'open_datetime' => $firstBuy['fill']->datetime,
                 'close_datetime' => $sellFill->datetime,
                 'quantity' => $matchQty,
-                'cost_basis' => $buyPrice,
+                'cost_basis' => ($buyPrice * $multiplier * $matchQty) + $buyFees,
                 'realized_pnl' => $pnl,
             ]);
             
             // Update remaining quantities
             $firstBuy['remaining_quantity'] -= $matchQty;
             $remainingSellQty -= $matchQty;
-            
-            // If buy is fully consumed, remove from queue
+
+            // If buy is fully consumed, remove from queue; otherwise write the
+            // updated remaining_quantity back (first() returns a copy, not a reference)
             if ($firstBuy['remaining_quantity'] <= 0) {
                 $buyQueue->shift();
+            } else {
+                $buyQueue[0] = $firstBuy;
             }
         }
         

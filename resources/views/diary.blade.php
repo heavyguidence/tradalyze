@@ -13,7 +13,35 @@
         <!-- Rich Text Editor Container -->
         <form id="diaryForm">
             @csrf
-            
+
+            {{-- Trading date for this entry --}}
+            <div class="mb-5 flex flex-col sm:flex-row sm:items-end gap-4">
+                <div class="flex-1">
+                    <label for="entry_date" class="block text-sm font-semibold text-gray-700 mb-1">
+                        Trading Date
+                        <span class="font-normal text-gray-400 ml-1">(leave blank for a general note)</span>
+                    </label>
+                    <input
+                        type="date"
+                        id="entry_date"
+                        name="entry_date"
+                        value="{{ request('date', date('Y-m-d')) }}"
+                        class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-orange-500 focus:border-orange-500 w-full sm:w-56"
+                    >
+                </div>
+            </div>
+
+            {{-- Existing-entry warning banner --}}
+            <div id="existing-entry-banner" class="hidden mb-4 flex items-center justify-between bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-sm text-amber-800">
+                <span id="existing-entry-msg"></span>
+                <div class="flex gap-3 ml-4 flex-shrink-0">
+                    <button type="button" id="load-existing-btn"
+                        class="font-medium underline hover:text-amber-900">Load existing content</button>
+                    <a id="existing-entry-link" href="#"
+                        class="font-medium underline hover:text-amber-900">View entry</a>
+                </div>
+            </div>
+
             <div class="mb-6">
                 <label class="block text-sm font-semibold text-gray-700 mb-3">
                     Write Your Trading Notes
@@ -156,26 +184,39 @@
         <div id="entriesList">
             @forelse($entries as $entry)
                 <div style="margin-bottom: 12px;">
-                    <a href="{{ route('diary.show', $entry->id) }}" class="block border border-gray-200 rounded-lg p-5 hover:border-orange-400 hover:shadow-md transition-all" data-entry-id="{{ $entry->id }}">
-                    <div class="flex justify-between items-start gap-4">
-                        <div class="flex-1 min-w-0">
-                            <div class="text-sm text-gray-500 mb-2">
-                                {{ $entry->created_at->format('F j, Y \a\t g:i A') }}
-                                @if($entry->created_at != $entry->updated_at)
-                                    <span class="text-xs text-gray-400">(edited)</span>
+                    <a href="{{ route('diary.show', $entry->id) }}" class="block border border-gray-200 rounded-lg p-5 hover:border-orange-400 hover:shadow-md transition-all">
+                        <div class="flex justify-between items-start gap-4">
+                            <div class="flex-1 min-w-0">
+                                {{-- Date badge --}}
+                                @if($entry->entry_date)
+                                    <div class="inline-flex items-center gap-1.5 mb-2 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                        </svg>
+                                        {{ $entry->entry_date->format('l, F j, Y') }}
+                                    </div>
+                                @else
+                                    <div class="inline-flex items-center gap-1 mb-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                                        General Note
+                                    </div>
                                 @endif
+                                <div class="text-xs text-gray-400 mb-1">
+                                    Written {{ $entry->created_at->format('M j, Y \a\t g:i A') }}
+                                    @if($entry->created_at != $entry->updated_at)
+                                        <span>(edited)</span>
+                                    @endif
+                                </div>
+                                <div class="text-gray-700 entry-preview text-sm">
+                                    {{ Str::limit(strip_tags($entry->content), 200) }}
+                                </div>
                             </div>
-                            <div class="text-gray-700 entry-preview">
-                                {{ Str::limit(strip_tags($entry->content), 200) }}
+                            <div class="flex-shrink-0">
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
                             </div>
                         </div>
-                        <div class="flex-shrink-0">
-                            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                            </svg>
-                        </div>
-                    </div>
-                </a>
+                    </a>
                 </div>
             @empty
                 <p class="text-gray-500 text-center py-8">No diary entries yet. Start writing your first entry above!</p>
@@ -316,32 +357,113 @@
 </style>
 
 <script>
-    // Format text using execCommand
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
     function formatText(command, value = null) {
         document.execCommand(command, false, value);
         document.getElementById('editor').focus();
     }
-    
-    // Change per page
+
     function changePerPage(value) {
         const url = new URL(window.location.href);
         url.searchParams.set('per_page', value);
-        url.searchParams.delete('page'); // Reset to first page
+        url.searchParams.delete('page');
         window.location.href = url.toString();
     }
-    
-    // Clear editor content
+
     function clearEditor() {
         if (confirm('Are you sure you want to clear all content?')) {
             document.getElementById('editor').innerHTML = '';
         }
     }
 
-    // Handle form submission for new entries
-    document.getElementById('diaryForm').addEventListener('submit', async function(e) {
+    // ── Date picker: check for existing entry when date changes ──────────────
+    let existingEntryId   = null;
+    let existingEntryContent = null;
+
+    async function checkExistingEntry(date) {
+        if (!date) { hideBanner(); return; }
+        try {
+            const res  = await fetch(`/diary/check-date?date=${date}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+            if (data.exists) {
+                existingEntryId      = data.id;
+                existingEntryContent = data.content;
+                document.getElementById('existing-entry-msg').textContent =
+                    `You already have a diary entry for ${date}.`;
+                document.getElementById('existing-entry-link').href = `/diary/${data.id}`;
+                document.getElementById('existing-entry-banner').classList.remove('hidden');
+            } else {
+                existingEntryId = null;
+                hideBanner();
+            }
+        } catch (e) { /* silently ignore */ }
+    }
+
+    function hideBanner() {
+        document.getElementById('existing-entry-banner').classList.add('hidden');
+    }
+
+    document.getElementById('entry_date').addEventListener('change', function () {
+        checkExistingEntry(this.value);
+    });
+
+    document.getElementById('load-existing-btn').addEventListener('click', function () {
+        if (existingEntryContent !== null) {
+            document.getElementById('editor').innerHTML = existingEntryContent;
+            hideBanner();
+            showNotification('Existing entry loaded. Saving will update it.', 'success');
+        }
+    });
+
+    // Run check on page load if a date is pre-filled
+    window.addEventListener('DOMContentLoaded', () => {
+        const dateVal = document.getElementById('entry_date').value;
+        if (dateVal) checkExistingEntry(dateVal);
+    });
+
+    // ── Paste handler: intercept images, upload, embed URL ───────────────────
+    document.getElementById('editor').addEventListener('paste', async function (e) {
+        const items = Array.from((e.clipboardData || e.originalEvent.clipboardData).items);
+        const imgItem = items.find(item => item.type.startsWith('image/'));
+        if (!imgItem) return;
+
         e.preventDefault();
 
-        const content = document.getElementById('editor').innerHTML;
+        const blob   = imgItem.getAsFile();
+        const tempId = 'img-upload-' + Date.now();
+        document.execCommand('insertHTML', false,
+            `<p id="${tempId}" style="color:#9CA3AF;font-style:italic">Uploading screenshot…</p>`);
+
+        const formData = new FormData();
+        formData.append('image', blob, 'screenshot-' + Date.now() + '.png');
+        formData.append('_token', csrfToken);
+
+        try {
+            const res  = await fetch('/diary/upload-image', { method: 'POST', body: formData });
+            const data = await res.json();
+            const el   = document.getElementById(tempId);
+            if (data.url && el) {
+                el.outerHTML = `<img src="${data.url}" style="max-width:100%;height:auto;margin:8px 0;border-radius:6px;border:1px solid #e5e7eb;" alt="screenshot">`;
+            } else if (el) {
+                el.remove();
+                showNotification('Image upload failed.', 'error');
+            }
+        } catch (err) {
+            const el = document.getElementById(tempId);
+            if (el) el.remove();
+            showNotification('Image upload failed.', 'error');
+        }
+    });
+
+    // ── Form submit ───────────────────────────────────────────────────────────
+    document.getElementById('diaryForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const content    = document.getElementById('editor').innerHTML;
+        const entry_date = document.getElementById('entry_date').value || null;
 
         if (!content.trim()) {
             showNotification('Please write something before saving!', 'error');
@@ -353,46 +475,34 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
+                    'X-CSRF-TOKEN': csrfToken,
                 },
-                body: JSON.stringify({
-                    content: content
-                })
+                body: JSON.stringify({ content, entry_date }),
             });
 
             const data = await response.json();
 
             if (data.success) {
                 showNotification(data.message, 'success');
-                
-                // Reload the page to show new entry
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
+                setTimeout(() => window.location.reload(), 1000);
             } else {
-                showNotification(data.message, 'error');
+                showNotification(data.message || 'Error saving entry.', 'error');
             }
         } catch (error) {
-            console.error('Error:', error);
             showNotification('Failed to save entry. Please try again.', 'error');
         }
     });
-    
-    // Show notification
+
     function showNotification(message, type = 'success') {
-        const notification = document.createElement('div');
-        notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 transition-all duration-300 ${
+        const n = document.createElement('div');
+        n.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 transition-all duration-300 ${
             type === 'success' ? 'bg-green-500' : 'bg-red-500'
         }`;
-        notification.textContent = message;
-        
-        document.body.appendChild(notification);
-        
+        n.textContent = message;
+        document.body.appendChild(n);
         setTimeout(() => {
-            notification.style.opacity = '0';
-            setTimeout(() => {
-                document.body.removeChild(notification);
-            }, 300);
+            n.style.opacity = '0';
+            setTimeout(() => n.remove(), 300);
         }, 3000);
     }
 </script>

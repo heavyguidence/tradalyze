@@ -42,6 +42,9 @@ Route::middleware('auth')->group(function () {
     
     Route::get('/diary', [DiaryController::class, 'index'])->name('diary');
     Route::post('/diary', [DiaryController::class, 'store'])->name('diary.store');
+    // These specific routes must come before the {entry} wildcard
+    Route::get('/diary/check-date', [DiaryController::class, 'checkDate'])->name('diary.check-date');
+    Route::post('/diary/upload-image', [DiaryController::class, 'uploadImage'])->name('diary.upload-image');
     Route::get('/diary/{entry}', [DiaryController::class, 'show'])->name('diary.show');
     Route::patch('/diary/{entry}', [DiaryController::class, 'update'])->name('diary.update');
     Route::delete('/diary/{entry}', [DiaryController::class, 'destroy'])->name('diary.destroy');
@@ -57,5 +60,7 @@ Route::middleware('auth')->group(function () {
     
     Route::post('/trades/{position}/tags/{tag}/attach', [TradesController::class, 'attachTag'])->name('trades.tags.attach');
     Route::delete('/trades/{position}/tags/{tag}/detach', [TradesController::class, 'detachTag'])->name('trades.tags.detach');
+    Route::post('/trades/{position}/screenshots', [TradesController::class, 'storeScreenshot'])->name('trades.screenshots.store');
+    Route::delete('/trades/{position}/screenshots/{screenshot}', [TradesController::class, 'destroyScreenshot'])->name('trades.screenshots.destroy');
 });
 

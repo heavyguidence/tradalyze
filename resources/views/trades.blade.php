@@ -321,142 +321,229 @@
                     <th class="px-6 py-3 text-left">
                         <input type="checkbox" id="select-all" onchange="toggleSelectAll(this)" class="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500">
                     </th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Opened Date</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Closed Date</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Entry</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Exit</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Opened</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Closed</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost Basis</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P&L</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tags</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th class="px-6 py-3 text-right"></th>
                 </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                @forelse($positions as $position)
-                <tr class="group hover:bg-gray-50 transition-colors position-row cursor-pointer" onclick="window.location='{{ route('trades.show', $position) }}'">
-                    <td class="px-6 py-4 whitespace-nowrap" onclick="event.stopPropagation()">
-                        <input type="checkbox" name="position_ids[]" value="{{ $position->id }}" onchange="updateBulkDeleteButton()" class="position-checkbox w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500">
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {{ $position->open_datetime->format('M d, Y') }}
-                        <span class="block text-xs text-gray-500">{{ $position->open_datetime->format('H:i:s') }}</span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        @if($position->isClosed())
-                            {{ $position->close_datetime->format('M d, Y') }}
-                            <span class="block text-xs text-gray-500">{{ $position->close_datetime->format('H:i:s') }}</span>
-                        @else
-                            <span class="text-gray-400">-</span>
-                        @endif
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="text-sm font-medium text-gray-900">{{ $position->instrument->symbol }}</div>
-                        @if($position->instrument->underlying_symbol)
-                            <div class="text-xs text-gray-500">{{ $position->instrument->underlying_symbol }}</div>
-                        @endif
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
-                            {{ $position->instrument->asset_type === 'STK' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800' }}">
-                            {{ $position->instrument->asset_type }}
-                        </span>
-                        @if($position->instrument->isOption())
-                            <span class="ml-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
-                                {{ $position->instrument->put_call === 'C' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                {{ $position->instrument->put_call === 'C' ? 'CALL' : 'PUT' }}
-                            </span>
-                        @endif
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${{ number_format($position->cost_basis, 2) }}
-                        <span class="block text-xs text-gray-500">Qty: {{ number_format($position->quantity, 0) }}</span>
-                        @if($position->instrument->isOption())
-                            <span class="block text-xs text-gray-500">Strike: ${{ number_format($position->instrument->strike, 2) }}</span>
-                        @endif
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        @if($position->isClosed())
-                            <span class="text-gray-700">Avg Exit</span>
-                            <span class="block text-xs text-gray-500">FIFO Matched</span>
-                        @else
-                            <span class="text-gray-400">-</span>
-                        @endif
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        @if($position->isClosed())
-                            @if($position->isProfitable())
-                                <span class="text-green-600">+${{ number_format($position->realized_pnl, 2) }}</span>
-                            @elseif($position->isLoss())
-                                <span class="text-red-600">-${{ number_format(abs($position->realized_pnl), 2) }}</span>
-                            @else
-                                <span class="text-gray-600">$0.00</span>
-                            @endif
-                        @else
-                            <span class="text-gray-400">Open</span>
-                        @endif
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="flex flex-wrap gap-1">
-                            @foreach($position->tags as $tag)
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium text-white" style="background-color: {{ $tag->color }}">
-                                    {{ $tag->name }}
-                                </span>
-                            @endforeach
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        @if($position->isClosed())
-                            @if($position->isProfitable())
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+            <tbody class="bg-white" id="trades-tbody">
+                @php
+                    // Group positions by close date, preserving the sorted order from the query
+                    $groupedPositions = collect();
+                    foreach ($positions as $position) {
+                        $key = $position->close_datetime
+                            ? $position->close_datetime->format('Y-m-d')
+                            : 'open';
+                        if (!$groupedPositions->has($key)) {
+                            $groupedPositions[$key] = collect();
+                        }
+                        $groupedPositions[$key]->push($position);
+                    }
+                @endphp
+
+                @forelse($groupedPositions as $dateKey => $dayPositions)
+                    @php
+                        $isOpen     = $dateKey === 'open';
+                        $groupId    = 'grp-' . str_replace('-', '', $dateKey);
+                        $totalPnl   = $dayPositions->whereNotNull('realized_pnl')->sum('realized_pnl');
+                        $winCount   = $dayPositions->filter(fn($p) => $p->realized_pnl > 0)->count();
+                        $lossCount  = $dayPositions->filter(fn($p) => $p->realized_pnl < 0)->count();
+                        $tradeCount = $dayPositions->count();
+                    @endphp
+
+                    {{-- ── Day / group header row ── --}}
+                    @php
+                        $headerBorderColor = $isOpen ? 'border-yellow-400' : ($totalPnl > 0 ? 'border-green-400' : ($totalPnl < 0 ? 'border-red-400' : 'border-gray-300'));
+                    @endphp
+                    <tr class="cursor-pointer select-none border-t-2 border-gray-200 bg-gray-100 hover:bg-gray-200 transition-all"
+                        onclick="toggleDay('{{ $groupId }}')">
+                        <td colspan="11" class="pl-0 pr-0 py-0">
+                            <div class="flex items-center border-l-4 {{ $headerBorderColor }} pl-4 pr-8 py-5">
+                                {{-- Left: chevron + date + counts --}}
+                                <div class="flex items-center gap-3 flex-1 min-w-0">
+                                    <svg data-chevron="{{ $groupId }}"
+                                         class="w-4 h-4 text-gray-500 transition-transform duration-200 flex-shrink-0 rotate-90"
+                                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                                     </svg>
-                                    Win
+                                    <span class="font-bold text-sm text-gray-800 tracking-wide">
+                                        @if($isOpen)
+                                            Open Positions
+                                        @else
+                                            {{ \Carbon\Carbon::parse($dateKey)->format('l, F d, Y') }}
+                                        @endif
+                                    </span>
+                                    <span class="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full shadow-sm">
+                                        {{ $tradeCount }} {{ $tradeCount === 1 ? 'trade' : 'trades' }}
+                                    </span>
+                                    @if(!$isOpen && $winCount > 0)
+                                        <span class="text-xs font-semibold text-green-700 bg-green-100 border border-green-200 px-2 py-0.5 rounded-full">{{ $winCount }}W</span>
+                                    @endif
+                                    @if(!$isOpen && $lossCount > 0)
+                                        <span class="text-xs font-semibold text-red-700 bg-red-100 border border-red-200 px-2 py-0.5 rounded-full">{{ $lossCount }}L</span>
+                                    @endif
+                                </div>
+                                {{-- Right: diary indicator + daily total P&L --}}
+                                <div class="flex items-center gap-4 flex-shrink-0">
+                                    @if(!$isOpen && isset($diaryEntryByDate[$dateKey]))
+                                        @php $diaryEntry = $diaryEntryByDate[$dateKey]; @endphp
+                                        <a href="{{ route('diary.show', $diaryEntry->id) }}"
+                                           onclick="event.stopPropagation()"
+                                           title="View diary entry for this day"
+                                           class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-orange-500 text-white hover:bg-orange-600 transition-colors shadow-sm">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                                            </svg>
+                                            Journal
+                                        </a>
+                                    @elseif(!$isOpen)
+                                        <a href="{{ route('diary') }}?date={{ $dateKey }}"
+                                           onclick="event.stopPropagation()"
+                                           title="Write a diary entry for this day"
+                                           class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium text-gray-500 bg-white border border-gray-200 hover:border-orange-300 hover:text-orange-600 transition-colors shadow-sm">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                                            </svg>
+                                            Add Journal
+                                        </a>
+                                    @endif
+                                    @if(!$isOpen)
+                                        <span class="font-bold text-base tabular-nums
+                                            {{ $totalPnl > 0 ? 'text-green-600' : ($totalPnl < 0 ? 'text-red-600' : 'text-gray-500') }}">
+                                            {{ $totalPnl >= 0 ? '+' : '-' }}${{ number_format(abs($totalPnl), 2) }}
+                                        </span>
+                                    @endif
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+
+                    {{-- ── Individual trade rows (collapsed by default) ── --}}
+                    @foreach($dayPositions as $position)
+                    @php
+                        $rowBg = $position->isClosed()
+                            ? ($position->isProfitable() ? 'bg-green-50/40 hover:bg-green-50' : ($position->isLoss() ? 'bg-red-50/40 hover:bg-red-50' : 'hover:bg-gray-50'))
+                            : 'hover:bg-yellow-50/50';
+                    @endphp
+                    <tr class="group transition-colors position-row cursor-pointer day-trade-row hidden border-t border-gray-100 {{ $rowBg }}"
+                        data-group="{{ $groupId }}"
+                        onclick="window.location='{{ route('trades.show', $position) }}'">
+                        <td class="px-4 py-3.5 whitespace-nowrap" onclick="event.stopPropagation()">
+                            <input type="checkbox" name="position_ids[]" value="{{ $position->id }}" onchange="updateBulkDeleteButton()" class="position-checkbox w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500">
+                        </td>
+                        {{-- Symbol --}}
+                        <td class="px-4 py-3.5 whitespace-nowrap">
+                            <div class="font-semibold text-sm text-gray-900">{{ $position->instrument->symbol }}</div>
+                            @if($position->instrument->underlying_symbol && $position->instrument->underlying_symbol !== $position->instrument->symbol)
+                                <div class="text-xs text-gray-400">{{ $position->instrument->underlying_symbol }}</div>
+                            @endif
+                        </td>
+                        {{-- Type --}}
+                        <td class="px-4 py-3.5 whitespace-nowrap">
+                            @if($position->instrument->asset_type === 'STK')
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">Stock</span>
+                            @else
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                                    {{ $position->instrument->put_call === 'C' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700' }}">
+                                    {{ $position->instrument->put_call === 'C' ? 'Call' : 'Put' }}
+                                </span>
+                                @if($position->instrument->strike)
+                                    <div class="text-xs text-gray-400 mt-0.5">${{ number_format($position->instrument->strike, 0) }}</div>
+                                @endif
+                            @endif
+                        </td>
+                        {{-- Opened --}}
+                        <td class="px-4 py-3.5 whitespace-nowrap text-sm text-gray-700">
+                            @if($isOpen)
+                                {{ $position->open_datetime->format('M d, Y') }}
+                                <span class="block text-xs text-gray-400">{{ $position->open_datetime->format('H:i') }}</span>
+                            @else
+                                {{ $position->open_datetime->format('H:i') }}
+                                @if($position->open_datetime->format('Y-m-d') !== $dateKey)
+                                    <span class="block text-xs text-gray-400">{{ $position->open_datetime->format('M d') }}</span>
+                                @endif
+                            @endif
+                        </td>
+                        {{-- Closed --}}
+                        <td class="px-4 py-3.5 whitespace-nowrap text-sm text-gray-700">
+                            @if($position->isClosed())
+                                {{ $position->close_datetime->format('H:i') }}
+                            @else
+                                <span class="text-gray-300">—</span>
+                            @endif
+                        </td>
+                        {{-- Cost Basis --}}
+                        <td class="px-4 py-3.5 whitespace-nowrap text-sm text-gray-700 tabular-nums">
+                            ${{ number_format($position->cost_basis, 2) }}
+                        </td>
+                        {{-- Qty --}}
+                        <td class="px-4 py-3.5 whitespace-nowrap text-sm text-gray-500 tabular-nums">
+                            {{ number_format($position->quantity, 0) }}
+                        </td>
+                        {{-- P&L --}}
+                        <td class="px-4 py-3.5 whitespace-nowrap">
+                            @if($position->isClosed())
+                                <span class="font-bold text-sm tabular-nums {{ $position->isProfitable() ? 'text-green-600' : ($position->isLoss() ? 'text-red-600' : 'text-gray-500') }}">
+                                    {{ $position->isProfitable() ? '+' : ($position->isLoss() ? '-' : '') }}${{ number_format(abs($position->realized_pnl), 2) }}
                                 </span>
                             @else
-                                <span class="text-gray-600">$0.00</span>
+                                <span class="text-xs text-gray-400 italic">pending</span>
                             @endif
-                        @else
-                            <span class="text-gray-400">-</span>
-                        @endif
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm">
-                        @if($position->isClosed())
-                            @if($position->isProfitable())
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                    </svg>
-                                    Win
-                                </span>
+                        </td>
+                        {{-- Tags --}}
+                        <td class="px-4 py-3.5 whitespace-nowrap">
+                            <div class="flex flex-wrap gap-1">
+                                @foreach($position->tags as $tag)
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white" style="background-color: {{ $tag->color }}">
+                                        {{ $tag->name }}
+                                    </span>
+                                @endforeach
+                            </div>
+                        </td>
+                        {{-- Status --}}
+                        <td class="px-4 py-3.5 whitespace-nowrap">
+                            @if($position->isClosed())
+                                @if($position->isProfitable())
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-200">
+                                        <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>
+                                        Win
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
+                                        <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>
+                                        Loss
+                                    </span>
+                                @endif
                             @else
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                                    </svg>
-                                    Loss
+                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                                    <svg class="w-2.5 h-2.5 animate-pulse" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>
+                                    Open
                                 </span>
                             @endif
-                        @else
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                <svg class="w-3 h-3 mr-1 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"></path>
-                                </svg>
-                                Open
-                            </span>
-                        @endif
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-right">
-                        <svg class="w-5 h-5 text-gray-400 group-hover:text-orange-600 transition-colors inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                        </svg>
-                    </td>
-                </tr>
+                        </td>
+                        {{-- Arrow --}}
+                        <td class="px-4 py-3.5 whitespace-nowrap text-right">
+                            <svg class="w-4 h-4 text-gray-300 group-hover:text-orange-500 transition-colors inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </td>
+                    </tr>
+                    @endforeach
+                    {{-- Section bottom divider --}}
+                    <tr class="day-trade-row hidden border-0" data-group="{{ $groupId }}">
+                        <td colspan="11" class="p-0"><div class="h-px bg-gray-300"></div></td>
+                    </tr>
+
                 @empty
                 <tr>
-                    <td colspan="10" class="px-6 py-12 text-center">
+                    <td colspan="11" class="px-6 py-12 text-center">
                         <div class="flex flex-col items-center justify-center">
                             <svg class="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
@@ -607,8 +694,31 @@ document.getElementById('per-page').addEventListener('change', function() {
     form.submit();
 });
 
+function toggleDay(groupId) {
+    const rows    = document.querySelectorAll(`.day-trade-row[data-group="${groupId}"]`);
+    const chevron = document.querySelector(`[data-chevron="${groupId}"]`);
+    // Rows are expanded by default (no hidden class), so "opening" means they are currently hidden
+    const opening = rows.length > 0 && rows[0].classList.contains('hidden');
+
+    rows.forEach(row => row.classList.toggle('hidden', !opening));
+
+    if (chevron) {
+        // 90° = expanded (pointing down), 0° = collapsed (pointing right)
+        chevron.style.transform = opening ? 'rotate(90deg)' : 'rotate(0deg)';
+    }
+
+    // Uncheck hidden checkboxes when collapsing so the bulk-delete count stays accurate
+    if (!opening) {
+        rows.forEach(row => {
+            const cb = row.querySelector('.position-checkbox');
+            if (cb) cb.checked = false;
+        });
+        updateBulkDeleteButton();
+    }
+}
+
 function toggleSelectAll(checkbox) {
-    const checkboxes = document.querySelectorAll('.position-checkbox');
+    const checkboxes = document.querySelectorAll('.day-trade-row:not(.hidden) .position-checkbox');
     checkboxes.forEach(cb => {
         cb.checked = checkbox.checked;
     });

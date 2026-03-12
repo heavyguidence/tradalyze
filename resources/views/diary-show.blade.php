@@ -47,12 +47,103 @@
         </div>
     </div>
 
+    <!-- Entry Date Badge -->
+    @if($entry->entry_date)
+        <div class="mb-4 flex items-center gap-3">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                Trading Day: {{ $entry->entry_date->format('l, F d, Y') }}
+            </span>
+        </div>
+    @endif
+
     <!-- View Mode -->
     <div id="viewMode" class="bg-white rounded-xl shadow-lg p-8">
         <div class="entry-content prose prose-lg max-w-none">
             {!! $entry->content !!}
         </div>
     </div>
+
+    <!-- Trades on this day panel -->
+    @if($entry->entry_date && $tradingDayPositions->isNotEmpty())
+    <div class="bg-white rounded-xl shadow-lg mb-6">
+        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    Trades on this Day
+                </h3>
+                <p class="text-sm text-gray-500 mt-0.5">{{ $tradingDayPositions->count() }} position{{ $tradingDayPositions->count() !== 1 ? 's' : '' }} closed on {{ $entry->entry_date->format('F d, Y') }}</p>
+            </div>
+            @php
+                $dayTotal = $tradingDayPositions->sum('realized_pnl');
+                $wins = $tradingDayPositions->filter(fn($p) => $p->realized_pnl > 0)->count();
+                $losses = $tradingDayPositions->filter(fn($p) => $p->realized_pnl < 0)->count();
+            @endphp
+            <div class="flex items-center gap-3">
+                @if($wins > 0)
+                    <span class="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">{{ $wins }}W</span>
+                @endif
+                @if($losses > 0)
+                    <span class="text-xs font-medium text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{{ $losses }}L</span>
+                @endif
+                <span class="font-bold text-lg {{ $dayTotal > 0 ? 'text-green-600' : ($dayTotal < 0 ? 'text-red-600' : 'text-gray-500') }}">
+                    {{ $dayTotal >= 0 ? '+' : '-' }}${{ number_format(abs($dayTotal), 2) }}
+                </span>
+            </div>
+        </div>
+        <div class="divide-y divide-gray-100">
+            @foreach($tradingDayPositions as $pos)
+            <div class="px-6 py-4">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <a href="{{ route('trades.show', $pos) }}" class="font-semibold text-gray-900 hover:text-orange-600 transition-colors text-sm whitespace-nowrap">
+                            {{ $pos->instrument->symbol }}
+                        </a>
+                        @if($pos->instrument->isOption())
+                            <span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                                {{ $pos->instrument->put_call }} ${{ number_format($pos->instrument->strike, 0) }}
+                            </span>
+                        @endif
+                        <span class="text-xs text-gray-400">{{ number_format($pos->quantity, 0) }} {{ $pos->instrument->isOption() ? 'contracts' : 'shares' }}</span>
+                    </div>
+                    <div class="flex items-center gap-4 flex-shrink-0">
+                        @if($pos->isClosed())
+                            <span class="text-sm font-bold {{ $pos->isProfitable() ? 'text-green-600' : 'text-red-600' }}">
+                                {{ $pos->isProfitable() ? '+' : '-' }}${{ number_format(abs($pos->realized_pnl), 2) }}
+                            </span>
+                            @if($pos->isProfitable())
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Win</span>
+                            @else
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Loss</span>
+                            @endif
+                        @else
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">Open</span>
+                        @endif
+                        <a href="{{ route('trades.show', $pos) }}" class="text-xs text-orange-600 hover:text-orange-700 font-medium whitespace-nowrap">View →</a>
+                    </div>
+                </div>
+                {{-- Screenshots for this position --}}
+                @if($pos->screenshots->isNotEmpty())
+                <div class="mt-3 flex flex-wrap gap-2">
+                    @foreach($pos->screenshots as $shot)
+                    <a href="{{ $shot->url }}" target="_blank" class="block">
+                        <img src="{{ $shot->url }}"
+                             alt="{{ $shot->original_name ?? 'Screenshot' }}"
+                             class="h-20 w-32 object-cover rounded border border-gray-200 hover:border-orange-400 transition-colors">
+                    </a>
+                    @endforeach
+                </div>
+                @endif
+            </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
 
     <!-- Edit Mode -->
     <div id="editMode" class="bg-white rounded-xl shadow-lg p-8 hidden">
@@ -312,6 +403,39 @@
         }
     }
     
+    // Paste image handler for editor
+    document.getElementById('editor').addEventListener('paste', async function(e) {
+        const items = e.clipboardData && e.clipboardData.items;
+        if (!items) return;
+        for (const item of items) {
+            if (item.type.startsWith('image/')) {
+                e.preventDefault();
+                const file = item.getAsFile();
+                const placeholder = document.createElement('p');
+                placeholder.textContent = 'Uploading image…';
+                placeholder.style.color = '#9CA3AF';
+                document.execCommand('insertHTML', false, placeholder.outerHTML);
+                const fd = new FormData();
+                fd.append('image', file);
+                fd.append('_token', '{{ csrf_token() }}');
+                try {
+                    const res = await fetch('{{ route('diary.upload-image') }}', { method: 'POST', body: fd });
+                    const json = await res.json();
+                    const placeholders = document.getElementById('editor').querySelectorAll('p');
+                    for (const p of placeholders) {
+                        if (p.textContent === 'Uploading image…') {
+                            p.outerHTML = `<img src="${json.url}" style="max-width:100%;height:auto;margin:1em 0;">`;
+                            break;
+                        }
+                    }
+                } catch {
+                    // leave placeholder text on error
+                }
+                return;
+            }
+        }
+    });
+
     // Handle form submission
     document.getElementById('updateForm').addEventListener('submit', async function(e) {
         e.preventDefault();

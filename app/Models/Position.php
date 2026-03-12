@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Position extends Model
@@ -40,6 +41,11 @@ class Position extends Model
     public function tags(): BelongsToMany
     {
         return $this->belongsToMany(TradeTag::class, 'position_trade_tag');
+    }
+
+    public function screenshots(): HasMany
+    {
+        return $this->hasMany(PositionScreenshot::class);
     }
 
     public function isOpen(): bool

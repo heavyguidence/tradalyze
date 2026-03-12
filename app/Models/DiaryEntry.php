@@ -11,13 +11,15 @@ class DiaryEntry extends Model
 
     protected $fillable = [
         'user_id',
+        'entry_date',
         'title',
         'content',
     ];
 
     protected $casts = [
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'entry_date'  => 'date',
+        'created_at'  => 'datetime',
+        'updated_at'  => 'datetime',
     ];
 
     public function user()

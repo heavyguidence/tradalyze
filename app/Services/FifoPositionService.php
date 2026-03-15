@@ -11,41 +11,60 @@ use Illuminate\Support\Facades\DB;
 class FifoPositionService
 {
     /**
-     * Process all fills for an instrument and create/update positions using FIFO
+     * Process all fills for an instrument and create/update positions using FIFO.
+     * Handles both long (buy-first) and short (sell-first) trades.
      */
     public function processInstrument(Instrument $instrument): void
     {
         DB::beginTransaction();
-        
+
         try {
-            // Delete existing positions for this instrument (we'll recalculate)
             $instrument->positions()->delete();
-            
-            // Get all fills for this instrument, ordered by datetime
+
             $fills = $instrument->fills()->orderBy('datetime')->get();
-            
-            // FIFO queue to track BUY fills
-            $buyQueue = collect();
-            
+
+            $buyQueue  = collect(); // open long fills
+            $sellQueue = collect(); // open short fills
+
             foreach ($fills as $fill) {
                 if ($fill->isBuy()) {
-                    // Add to FIFO queue
-                    $buyQueue->push([
-                        'fill' => $fill,
-                        'remaining_quantity' => $fill->quantity,
-                    ]);
+                    $remaining = $fill->quantity;
+
+                    // Close any open short positions first
+                    if ($sellQueue->isNotEmpty()) {
+                        $remaining = $this->processShortClose($fill, $sellQueue, $instrument);
+                    }
+
+                    // Whatever is left opens a new long position
+                    if ($remaining > 0) {
+                        $buyQueue->push([
+                            'fill'               => $fill,
+                            'remaining_quantity' => $remaining,
+                        ]);
+                    }
                 } else {
-                    // SELL - consume from buy queue
-                    $this->processSell($fill, $buyQueue, $instrument);
+                    $remaining = $fill->quantity;
+
+                    // Close any open long positions first
+                    if ($buyQueue->isNotEmpty()) {
+                        $remaining = $this->processSell($fill, $buyQueue, $instrument);
+                    }
+
+                    // Whatever is left opens a new short position
+                    if ($remaining > 0) {
+                        $sellQueue->push([
+                            'fill'               => $fill,
+                            'remaining_quantity' => $remaining,
+                        ]);
+                    }
                 }
             }
-            
-            // Create open positions for remaining buy fills in queue
+
+            // Create open long positions for remaining buy fills
             foreach ($buyQueue as $queueItem) {
                 if ($queueItem['remaining_quantity'] > 0) {
                     $openFill = $queueItem['fill'];
                     $openQty  = $queueItem['remaining_quantity'];
-                    // Proportional fees for the remaining (unsold) quantity
                     $openFees = $openFill->quantity > 0
                         ? ($openFill->fees / $openFill->quantity) * $openQty
                         : 0;
@@ -54,14 +73,33 @@ class FifoPositionService
                         'instrument_id' => $instrument->id,
                         'open_datetime' => $openFill->datetime,
                         'close_datetime' => null,
-                        'quantity' => $openQty,
-                        // Total entry cost: price * qty * multiplier + fees
-                        'cost_basis' => ($openFill->price * $instrument->multiplier * $openQty) + $openFees,
-                        'realized_pnl' => null,
+                        'quantity'       => $openQty,
+                        'cost_basis'     => ($openFill->price * $instrument->multiplier * $openQty) + $openFees,
+                        'realized_pnl'   => null,
                     ]);
                 }
             }
-            
+
+            // Create open short positions for remaining sell fills
+            foreach ($sellQueue as $queueItem) {
+                if ($queueItem['remaining_quantity'] > 0) {
+                    $openFill = $queueItem['fill'];
+                    $openQty  = $queueItem['remaining_quantity'];
+                    $openFees = $openFill->quantity > 0
+                        ? ($openFill->fees / $openFill->quantity) * $openQty
+                        : 0;
+
+                    Position::create([
+                        'instrument_id' => $instrument->id,
+                        'open_datetime' => $openFill->datetime,
+                        'close_datetime' => null,
+                        'quantity'       => -$openQty, // negative indicates short
+                        'cost_basis'     => ($openFill->price * $instrument->multiplier * $openQty) - $openFees,
+                        'realized_pnl'   => null,
+                    ]);
+                }
+            }
+
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
@@ -70,65 +108,110 @@ class FifoPositionService
     }
 
     /**
-     * Process a SELL fill against the FIFO buy queue
+     * Process a SELL fill closing long positions from the buy queue.
+     * Returns any unmatched sell quantity (overflow becomes a short open).
      */
-    private function processSell(Fill $sellFill, $buyQueue, Instrument $instrument): void
+    private function processSell(Fill $sellFill, $buyQueue, Instrument $instrument): float
     {
         $remainingSellQty = $sellFill->quantity;
-        
+
         while ($remainingSellQty > 0 && $buyQueue->isNotEmpty()) {
             $firstBuy = $buyQueue->first();
-            
+
             if ($firstBuy['remaining_quantity'] <= 0) {
                 $buyQueue->shift();
                 continue;
             }
-            
-            // Calculate how much to match
-            $matchQty = min($remainingSellQty, $firstBuy['remaining_quantity']);
-            
-            // Calculate PnL for this leg
-            $buyPrice = $firstBuy['fill']->price;
+
+            $matchQty  = min($remainingSellQty, $firstBuy['remaining_quantity']);
+            $buyPrice  = $firstBuy['fill']->price;
             $sellPrice = $sellFill->price;
             $multiplier = $instrument->multiplier;
-            
-            // PnL = (sell_price - buy_price) * multiplier * qty - fees
-            $buyFees = ($firstBuy['fill']->fees / $firstBuy['fill']->quantity) * $matchQty;
-            $sellFees = ($sellFill->fees / $sellFill->quantity) * $matchQty;
+
+            $buyFees  = $firstBuy['fill']->quantity > 0
+                ? ($firstBuy['fill']->fees / $firstBuy['fill']->quantity) * $matchQty
+                : 0;
+            $sellFees = $sellFill->quantity > 0
+                ? ($sellFill->fees / $sellFill->quantity) * $matchQty
+                : 0;
             $totalFees = $buyFees + $sellFees;
-            
+
             $pnl = (($sellPrice - $buyPrice) * $multiplier * $matchQty) - $totalFees;
-            
-            // Create closed position
-            // cost_basis stores total entry cost (price * qty * multiplier + fees),
-            // matching the format used by manually-entered trades
+
             Position::create([
-                'instrument_id' => $instrument->id,
-                'open_datetime' => $firstBuy['fill']->datetime,
+                'instrument_id'  => $instrument->id,
+                'open_datetime'  => $firstBuy['fill']->datetime,
                 'close_datetime' => $sellFill->datetime,
-                'quantity' => $matchQty,
-                'cost_basis' => ($buyPrice * $multiplier * $matchQty) + $buyFees,
-                'realized_pnl' => $pnl,
+                'quantity'       => $matchQty,
+                'cost_basis'     => ($buyPrice * $multiplier * $matchQty) + $buyFees,
+                'realized_pnl'   => $pnl,
             ]);
-            
-            // Update remaining quantities
+
             $firstBuy['remaining_quantity'] -= $matchQty;
             $remainingSellQty -= $matchQty;
 
-            // If buy is fully consumed, remove from queue; otherwise write the
-            // updated remaining_quantity back (first() returns a copy, not a reference)
             if ($firstBuy['remaining_quantity'] <= 0) {
                 $buyQueue->shift();
             } else {
                 $buyQueue[0] = $firstBuy;
             }
         }
-        
-        // If there's still sell quantity remaining, it means we're selling short
-        // For now, we'll just log this - you can enhance this later
-        if ($remainingSellQty > 0) {
-            \Log::warning("Short position detected for instrument {$instrument->symbol}: {$remainingSellQty} units");
+
+        return $remainingSellQty;
+    }
+
+    /**
+     * Process a BUY fill closing short positions from the sell queue.
+     * Returns any unmatched buy quantity (overflow becomes a long open).
+     */
+    private function processShortClose(Fill $buyFill, $sellQueue, Instrument $instrument): float
+    {
+        $remainingBuyQty = $buyFill->quantity;
+
+        while ($remainingBuyQty > 0 && $sellQueue->isNotEmpty()) {
+            $firstSell = $sellQueue->first();
+
+            if ($firstSell['remaining_quantity'] <= 0) {
+                $sellQueue->shift();
+                continue;
+            }
+
+            $matchQty   = min($remainingBuyQty, $firstSell['remaining_quantity']);
+            $sellPrice  = $firstSell['fill']->price;
+            $buyPrice   = $buyFill->price;
+            $multiplier = $instrument->multiplier;
+
+            $sellFees = $firstSell['fill']->quantity > 0
+                ? ($firstSell['fill']->fees / $firstSell['fill']->quantity) * $matchQty
+                : 0;
+            $buyFees = $buyFill->quantity > 0
+                ? ($buyFill->fees / $buyFill->quantity) * $matchQty
+                : 0;
+            $totalFees = $sellFees + $buyFees;
+
+            // Short P&L: profit when sell price > buy price
+            $pnl = (($sellPrice - $buyPrice) * $multiplier * $matchQty) - $totalFees;
+
+            Position::create([
+                'instrument_id'  => $instrument->id,
+                'open_datetime'  => $firstSell['fill']->datetime,
+                'close_datetime' => $buyFill->datetime,
+                'quantity'       => -$matchQty, // negative indicates short
+                'cost_basis'     => ($sellPrice * $multiplier * $matchQty) - $sellFees,
+                'realized_pnl'   => $pnl,
+            ]);
+
+            $firstSell['remaining_quantity'] -= $matchQty;
+            $remainingBuyQty -= $matchQty;
+
+            if ($firstSell['remaining_quantity'] <= 0) {
+                $sellQueue->shift();
+            } else {
+                $sellQueue[0] = $firstSell;
+            }
         }
+
+        return $remainingBuyQty;
     }
 
     /**
@@ -137,7 +220,7 @@ class FifoPositionService
     public function processAllInstruments(): void
     {
         $instruments = Instrument::all();
-        
+
         foreach ($instruments as $instrument) {
             $this->processInstrument($instrument);
         }

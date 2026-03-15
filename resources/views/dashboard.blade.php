@@ -817,9 +817,67 @@ document.addEventListener('DOMContentLoaded', function() {
         margin-top: auto;
         padding: 0.5rem 0;
     }
-    #pnl-calendar .fc-theme-standard td, 
+    #pnl-calendar .fc-theme-standard td,
     #pnl-calendar .fc-theme-standard th {
         border-color: #e5e7eb;
+    }
+
+    /* Responsive text scaling for calendar */
+    @media (max-width: 1024px) {
+        #pnl-calendar .pnl-amount {
+            font-size: 0.8rem;
+            padding: 0.25rem 0;
+        }
+        #pnl-calendar .fc-col-header-cell-cushion {
+            font-size: 0.7rem;
+        }
+        #pnl-calendar .fc-daygrid-day-number {
+            font-size: 0.75rem;
+        }
+        #pnl-calendar .fc-toolbar-title {
+            font-size: 1rem !important;
+        }
+        #pnl-calendar .fc-daygrid-day-frame {
+            min-height: 60px;
+        }
+    }
+    @media (max-width: 768px) {
+        #pnl-calendar .pnl-amount {
+            font-size: 0.65rem;
+            padding: 0.15rem 0;
+            font-weight: 700;
+        }
+        #pnl-calendar .fc-col-header-cell-cushion {
+            font-size: 0.6rem;
+        }
+        #pnl-calendar .fc-daygrid-day-number {
+            font-size: 0.65rem;
+            padding: 0.15rem;
+        }
+        #pnl-calendar .fc-toolbar-title {
+            font-size: 0.875rem !important;
+        }
+        #pnl-calendar .fc-daygrid-day-frame {
+            min-height: 48px;
+        }
+        #pnl-calendar {
+            padding: 0.5rem;
+        }
+    }
+    @media (max-width: 480px) {
+        #pnl-calendar .pnl-amount {
+            font-size: 0.55rem;
+            padding: 0.1rem 0;
+        }
+        #pnl-calendar .fc-col-header-cell-cushion {
+            font-size: 0.5rem;
+        }
+        #pnl-calendar .fc-daygrid-day-number {
+            font-size: 0.55rem;
+        }
+        #pnl-calendar .fc-daygrid-day-frame {
+            min-height: 38px;
+        }
     }
 </style>
 @endsection

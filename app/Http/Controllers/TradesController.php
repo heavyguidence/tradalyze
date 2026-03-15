@@ -406,11 +406,18 @@ class TradesController extends Controller
                 }
                 
                 // Sanitize and prepare instrument data
-                $assetType = $data['AssetClass'] === 'STK' ? 'STK' : 'OPT';
-                
+                $ibAssetClass = trim($data['AssetClass'] ?? '');
+                if ($ibAssetClass === 'STK') {
+                    $assetType = 'STK';
+                } elseif ($ibAssetClass === 'FUT') {
+                    $assetType = 'FUT';
+                } else {
+                    $assetType = 'OPT'; // OPT, FOP, WAR, etc.
+                }
+
                 // Clean symbol - remove extra spaces
                 $cleanSymbol = preg_replace('/\s+/', '', trim($data['Symbol']));
-                
+
                 $instrumentData = [
                     'user_id' => auth()->id(),
                     'symbol' => $cleanSymbol,
@@ -418,23 +425,27 @@ class TradesController extends Controller
                     'asset_type' => $assetType,
                     'currency' => isset($data['CurrencyPrimary']) ? trim($data['CurrencyPrimary']) : 'USD',
                 ];
-                
-                // Add option-specific fields
-                if ($assetType === 'OPT') {
-                    // For expiry, handle empty or invalid dates
-                    $expiryDate = null;
-                    if (!empty($data['Expiry'])) {
-                        try {
-                            $expiryDate = date('Y-m-d', strtotime($data['Expiry']));
-                        } catch (\Exception $e) {
-                            \Log::warning('Invalid expiry date', ['expiry' => $data['Expiry'], 'symbol' => $cleanSymbol]);
-                        }
+
+                // Parse expiry date (shared by OPT and FUT)
+                $expiryDate = null;
+                if (!empty($data['Expiry'])) {
+                    try {
+                        $expiryDate = date('Y-m-d', strtotime($data['Expiry']));
+                    } catch (\Exception $e) {
+                        \Log::warning('Invalid expiry date', ['expiry' => $data['Expiry'], 'symbol' => $cleanSymbol]);
                     }
-                    
+                }
+
+                if ($assetType === 'OPT') {
                     $instrumentData['expiry'] = $expiryDate;
                     $instrumentData['strike'] = !empty($data['Strike']) ? (float)$data['Strike'] : null;
                     $instrumentData['put_call'] = !empty($data['Put/Call']) ? strtoupper(trim($data['Put/Call'])) : null;
                     $instrumentData['multiplier'] = !empty($data['Multiplier']) ? (int)$data['Multiplier'] : 100;
+                } elseif ($assetType === 'FUT') {
+                    $instrumentData['expiry'] = $expiryDate;
+                    $instrumentData['strike'] = null;
+                    $instrumentData['put_call'] = null;
+                    $instrumentData['multiplier'] = !empty($data['Multiplier']) ? (int)$data['Multiplier'] : 1;
                 } else {
                     $instrumentData['expiry'] = null;
                     $instrumentData['strike'] = null;

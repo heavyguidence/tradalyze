@@ -3,7 +3,8 @@
     "allow": [
       "Bash(php artisan storage:link)",
       "Bash(php artisan config:clear)",
-      "Bash(php artisan route:clear)"
+      "Bash(php artisan route:clear)",
+      "Bash(xargs grep:*)"
     ]
   }
 }

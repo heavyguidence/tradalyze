@@ -353,6 +353,78 @@
             </div>
         @endif
     </div>
+
+    <!-- Monthly P&L Panel (synced with calendar) -->
+    <div class="bg-white rounded-xl shadow-lg p-8">
+        <div class="flex items-center justify-between mb-5">
+            <h3 id="monthly-pnl-title" class="text-xl font-semibold text-gray-900">Monthly P&L</h3>
+            <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full flex items-center gap-1">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                Synced with calendar
+            </span>
+        </div>
+
+        <!-- Net P&L Headline -->
+        <div class="text-center mb-5 py-4 px-3 bg-gray-50 rounded-xl">
+            <p class="text-xs text-gray-500 uppercase tracking-widest mb-1">Net P&L</p>
+            <p id="monthly-net-pnl" class="text-4xl font-bold text-gray-300">—</p>
+        </div>
+
+        <!-- Gross Profit / Loss -->
+        <div class="grid grid-cols-2 gap-3 mb-4">
+            <div class="text-center p-3 bg-emerald-50 rounded-lg">
+                <p class="text-xs text-emerald-600 uppercase tracking-wide mb-1">Gross Profit</p>
+                <p id="monthly-gross-profit" class="text-lg font-bold text-emerald-600">—</p>
+            </div>
+            <div class="text-center p-3 bg-red-50 rounded-lg">
+                <p class="text-xs text-red-600 uppercase tracking-wide mb-1">Gross Loss</p>
+                <p id="monthly-gross-loss" class="text-lg font-bold text-red-600">—</p>
+            </div>
+        </div>
+
+        <!-- Win/Loss Day Ratio Bar -->
+        <div class="mb-4">
+            <div class="flex justify-between text-xs text-gray-500 mb-1">
+                <span id="monthly-win-days-label">0 win days</span>
+                <span id="monthly-win-rate-label" class="font-semibold">0%</span>
+                <span id="monthly-loss-days-label">0 loss days</span>
+            </div>
+            <div class="flex h-2.5 rounded-full overflow-hidden bg-gray-100">
+                <div id="monthly-win-bar" class="bg-emerald-500 transition-all duration-500" style="width:0%"></div>
+                <div id="monthly-loss-bar" class="bg-red-400 transition-all duration-500" style="width:0%"></div>
+            </div>
+        </div>
+
+        <!-- Stat Chips -->
+        <div class="grid grid-cols-3 gap-2 mb-4">
+            <div class="text-center p-2 bg-gray-50 rounded-lg">
+                <p class="text-xs text-gray-400 mb-0.5">Trading Days</p>
+                <p id="monthly-trading-days" class="text-base font-bold text-gray-700">—</p>
+            </div>
+            <div class="text-center p-2 bg-emerald-50 rounded-lg">
+                <p class="text-xs text-emerald-500 mb-0.5">Win Days</p>
+                <p id="monthly-win-days" class="text-base font-bold text-emerald-600">—</p>
+            </div>
+            <div class="text-center p-2 bg-red-50 rounded-lg">
+                <p class="text-xs text-red-500 mb-0.5">Loss Days</p>
+                <p id="monthly-loss-days" class="text-base font-bold text-red-600">—</p>
+            </div>
+        </div>
+
+        <!-- Best / Worst Day -->
+        <div class="grid grid-cols-2 gap-3">
+            <div class="p-3 bg-emerald-50 rounded-lg">
+                <p class="text-xs text-emerald-600 uppercase tracking-wide mb-1">Best Day</p>
+                <p id="monthly-best-day" class="text-base font-bold text-emerald-600">—</p>
+                <p id="monthly-best-day-date" class="text-xs text-gray-400 mt-0.5"></p>
+            </div>
+            <div class="p-3 bg-red-50 rounded-lg">
+                <p class="text-xs text-red-600 uppercase tracking-wide mb-1">Worst Day</p>
+                <p id="monthly-worst-day" class="text-base font-bold text-red-600">—</p>
+                <p id="monthly-worst-day-date" class="text-xs text-gray-400 mt-0.5"></p>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- FullCalendar CSS & JS -->
@@ -738,8 +810,14 @@ document.addEventListener('DOMContentLoaded', function() {
             right: ''
         },
         height: 'auto',
+        fixedWeekCount: false,
+        showNonCurrentDates: false,
         events: events,
+        datesSet: function(info) {
+            updateMonthlyStats(info.view.currentStart.getFullYear(), info.view.currentStart.getMonth());
+        },
         dayCellDidMount: function(info) {
+            if (info.isOther) return; // skip days that belong to adjacent months
             const dateStr = info.date.toISOString().split('T')[0];
             const dayData = dailyPnL[dateStr];
             
@@ -748,13 +826,103 @@ document.addEventListener('DOMContentLoaded', function() {
                 const pnlDiv = document.createElement('div');
                 pnlDiv.className = 'pnl-amount';
                 pnlDiv.style.color = pnl > 0 ? '#10b981' : pnl < 0 ? '#f43f5e' : '#6b7280';
-                pnlDiv.textContent = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+                pnlDiv.textContent = _fmtCalPnl(pnl);
+                pnlDiv.title = (pnl >= 0 ? '+' : '') + '$' + pnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 info.el.querySelector('.fc-daygrid-day-frame').appendChild(pnlDiv);
             }
         }
     });
     calendar.render();
+
+    // Initialise with the current month
+    const _now = new Date();
+    updateMonthlyStats(_now.getFullYear(), _now.getMonth());
 });
+
+function _fmtCalPnl(pnl) {
+    const sign = pnl >= 0 ? '+' : '-';
+    const abs  = Math.abs(pnl);
+    if (abs >= 100000) return sign + '$' + Math.round(abs / 1000) + 'K';
+    if (abs >=  10000) return sign + '$' + (abs / 1000).toFixed(1) + 'K';
+    if (abs >=   1000) return sign + '$' + (abs / 1000).toFixed(2) + 'K';
+    return sign + '$' + abs.toFixed(2);
+}
+
+// ── Monthly P&L helpers ───────────────────────────────────────────────────────
+
+const _allDailyPnL = @json($dailyPnL);
+
+function computeMonthlyStats(year, month) {
+    const prefix = year + '-' + String(month + 1).padStart(2, '0');
+    let netPnl = 0, grossProfit = 0, grossLoss = 0;
+    let winDays = 0, lossDays = 0, tradingDays = 0;
+    let bestDay = null, worstDay = null, bestDayDate = null, worstDayDate = null;
+
+    Object.entries(_allDailyPnL).forEach(function([date, data]) {
+        if (!date.startsWith(prefix)) return;
+        const pnl = parseFloat(data.total_pnl);
+        tradingDays++;
+        netPnl += pnl;
+        if (pnl > 0) { grossProfit += pnl; winDays++; }
+        else if (pnl < 0) { grossLoss += Math.abs(pnl); lossDays++; }
+        if (bestDay  === null || pnl > bestDay)  { bestDay  = pnl; bestDayDate  = date; }
+        if (worstDay === null || pnl < worstDay) { worstDay = pnl; worstDayDate = date; }
+    });
+
+    const winRate = tradingDays > 0 ? Math.round((winDays / tradingDays) * 100) : 0;
+    return { netPnl, grossProfit, grossLoss, winDays, lossDays, tradingDays, bestDay, worstDay, bestDayDate, worstDayDate, winRate };
+}
+
+function _fmtMoney(v) {
+    return (v >= 0 ? '+' : '-') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function _fmtDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function updateMonthlyStats(year, month) {
+    const stats = computeMonthlyStats(year, month);
+    const label = new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    document.getElementById('monthly-pnl-title').textContent = label + ' P&L';
+
+    const netEl = document.getElementById('monthly-net-pnl');
+    if (stats.tradingDays === 0) {
+        netEl.textContent = 'No trades';
+        netEl.className = 'text-4xl font-bold text-gray-300';
+    } else {
+        netEl.textContent = _fmtMoney(stats.netPnl);
+        netEl.className = 'text-4xl font-bold ' + (stats.netPnl >= 0 ? 'text-emerald-600' : 'text-red-600');
+    }
+
+    document.getElementById('monthly-gross-profit').textContent = stats.grossProfit > 0 ? '+$' + stats.grossProfit.toFixed(2) : '—';
+    document.getElementById('monthly-gross-loss').textContent   = stats.grossLoss  > 0 ? '-$' + stats.grossLoss.toFixed(2)  : '—';
+
+    document.getElementById('monthly-trading-days').textContent = stats.tradingDays || '—';
+    document.getElementById('monthly-win-days').textContent     = stats.winDays     || '—';
+    document.getElementById('monthly-loss-days').textContent    = stats.lossDays    || '—';
+
+    document.getElementById('monthly-win-days-label').textContent  = stats.winDays  + ' win '  + (stats.winDays  === 1 ? 'day' : 'days');
+    document.getElementById('monthly-loss-days-label').textContent = stats.lossDays + ' loss ' + (stats.lossDays === 1 ? 'day' : 'days');
+    document.getElementById('monthly-win-rate-label').textContent  = stats.winRate + '%';
+
+    const winPct = stats.tradingDays > 0 ? (stats.winDays / stats.tradingDays) * 100 : 0;
+    document.getElementById('monthly-win-bar').style.width  = winPct + '%';
+    document.getElementById('monthly-loss-bar').style.width = (100 - winPct) + '%';
+
+    const bestEl = document.getElementById('monthly-best-day');
+    bestEl.textContent = stats.bestDay !== null ? _fmtMoney(stats.bestDay) : '—';
+    bestEl.className   = 'text-base font-bold ' + (stats.bestDay !== null && stats.bestDay >= 0 ? 'text-emerald-600' : 'text-red-600');
+    document.getElementById('monthly-best-day-date').textContent = _fmtDate(stats.bestDayDate);
+
+    const worstEl = document.getElementById('monthly-worst-day');
+    worstEl.textContent = stats.worstDay !== null ? _fmtMoney(stats.worstDay) : '—';
+    worstEl.className   = 'text-base font-bold ' + (stats.worstDay !== null && stats.worstDay >= 0 ? 'text-emerald-600' : 'text-red-600');
+    document.getElementById('monthly-worst-day-date').textContent = _fmtDate(stats.worstDayDate);
+}
 </script>
 
 <style>
@@ -812,10 +980,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     #pnl-calendar .pnl-amount {
         text-align: center;
-        font-size: 1rem;
-        font-weight: 800;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
         margin-top: auto;
-        padding: 0.5rem 0;
+        padding: 0.35rem 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        width: 100%;
     }
     #pnl-calendar .fc-theme-standard td,
     #pnl-calendar .fc-theme-standard th {
@@ -825,8 +998,8 @@ document.addEventListener('DOMContentLoaded', function() {
     /* Responsive text scaling for calendar */
     @media (max-width: 1024px) {
         #pnl-calendar .pnl-amount {
-            font-size: 0.8rem;
-            padding: 0.25rem 0;
+            font-size: 0.7rem;
+            padding: 0.2rem 2px;
         }
         #pnl-calendar .fc-col-header-cell-cushion {
             font-size: 0.7rem;
@@ -843,9 +1016,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     @media (max-width: 768px) {
         #pnl-calendar .pnl-amount {
-            font-size: 0.65rem;
-            padding: 0.15rem 0;
-            font-weight: 700;
+            font-size: 0.6rem;
+            padding: 0.1rem 2px;
+            font-weight: 600;
         }
         #pnl-calendar .fc-col-header-cell-cushion {
             font-size: 0.6rem;
@@ -866,8 +1039,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     @media (max-width: 480px) {
         #pnl-calendar .pnl-amount {
-            font-size: 0.55rem;
-            padding: 0.1rem 0;
+            font-size: 0.5rem;
+            padding: 0.05rem 2px;
         }
         #pnl-calendar .fc-col-header-cell-cushion {
             font-size: 0.5rem;

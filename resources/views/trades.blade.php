@@ -286,7 +286,7 @@
             </div>
 
             <!-- Preserve per_page in filters -->
-            <input type="hidden" name="per_page" value="{{ request('per_page', 30) }}">
+            <input type="hidden" name="per_page" value="{{ request('per_page', 10) }}">
         </form>
     </div>
 
@@ -303,12 +303,12 @@
             <div class="flex items-center space-x-2">
                 <label for="per-page" class="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Show:</label>
                 <select id="per-page" onchange="changePerPage(this.value)" class="px-2 sm:px-3 py-1.5 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
-                    <option value="30" {{ request('per_page', 30) == 30 ? 'selected' : '' }}>30</option>
-                    <option value="50" {{ request('per_page') == 50 ? 'selected' : '' }}>50</option>
-                    <option value="100" {{ request('per_page') == 100 ? 'selected' : '' }}>100</option>
+                    <option value="5"  {{ request('per_page', 10) == 5   ? 'selected' : '' }}>5</option>
+                    <option value="10" {{ request('per_page', 10) == 10  ? 'selected' : '' }}>10</option>
+                    <option value="20" {{ request('per_page') == 20  ? 'selected' : '' }}>20</option>
                     <option value="all" {{ request('per_page') == 'all' ? 'selected' : '' }}>All</option>
                 </select>
-                <span class="text-xs sm:text-sm text-gray-600 hidden sm:inline whitespace-nowrap">entries</span>
+                <span class="text-xs sm:text-sm text-gray-600 hidden sm:inline whitespace-nowrap">days</span>
             </div>
         </div>
     </div>
@@ -334,20 +334,6 @@
                 </tr>
             </thead>
             <tbody class="bg-white" id="trades-tbody">
-                @php
-                    // Group positions by close date, preserving the sorted order from the query
-                    $groupedPositions = collect();
-                    foreach ($positions as $position) {
-                        $key = $position->close_datetime
-                            ? $position->close_datetime->format('Y-m-d')
-                            : 'open';
-                        if (!$groupedPositions->has($key)) {
-                            $groupedPositions[$key] = collect();
-                        }
-                        $groupedPositions[$key]->push($position);
-                    }
-                @endphp
-
                 @forelse($groupedPositions as $dateKey => $dayPositions)
                     @php
                         $isOpen     = $dateKey === 'open';
@@ -432,7 +418,7 @@
                             ? ($position->isProfitable() ? 'bg-green-50/40 hover:bg-green-50' : ($position->isLoss() ? 'bg-red-50/40 hover:bg-red-50' : 'hover:bg-gray-50'))
                             : 'hover:bg-yellow-50/50';
                     @endphp
-                    <tr class="group transition-colors position-row cursor-pointer day-trade-row hidden border-t border-gray-100 {{ $rowBg }}"
+                    <tr class="group transition-colors position-row cursor-pointer day-trade-row border-t border-gray-100 {{ $rowBg }}"
                         data-group="{{ $groupId }}"
                         onclick="window.location='{{ route('trades.show', $position) }}'">
                         <td class="px-4 py-3.5 whitespace-nowrap" onclick="event.stopPropagation()">
@@ -537,7 +523,7 @@
                     </tr>
                     @endforeach
                     {{-- Section bottom divider --}}
-                    <tr class="day-trade-row hidden border-0" data-group="{{ $groupId }}">
+                    <tr class="day-trade-row border-0" data-group="{{ $groupId }}">
                         <td colspan="11" class="p-0"><div class="h-px bg-gray-300"></div></td>
                     </tr>
 
@@ -561,79 +547,59 @@
     <!-- Custom Pagination Footer -->
     <div class="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
         <div class="text-sm text-gray-600">
-            Showing {{ $positions->firstItem() ?? 0 }} to {{ $positions->lastItem() ?? 0 }} of {{ $positions->total() }} entries
+            @if(request('per_page') === 'all')
+                All {{ $totalDays }} trading {{ $totalDays === 1 ? 'day' : 'days' }}
+            @else
+                {{ $groupedPositions->count() }} of {{ $totalDays }} trading {{ $totalDays === 1 ? 'day' : 'days' }}
+            @endif
         </div>
-        
+
         <div class="flex items-center space-x-4">
-            @if($positions->hasPages() && request('per_page') !== 'all')
+            @if($daysPaginator->hasPages() && request('per_page') !== 'all')
                 <div class="text-sm text-gray-600">
-                    Page {{ $positions->currentPage() }} of {{ $positions->lastPage() }}
+                    Page {{ $daysPaginator->currentPage() }} of {{ $daysPaginator->lastPage() }}
                 </div>
-                
+
                 <div class="flex space-x-1">
-                    {{-- Previous Button --}}
-                    @if($positions->onFirstPage())
-                        <span class="px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg text-sm cursor-not-allowed">
-                            Previous
-                        </span>
+                    {{-- Previous --}}
+                    @if($daysPaginator->onFirstPage())
+                        <span class="px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg text-sm cursor-not-allowed">Previous</span>
                     @else
-                        <a href="{{ $positions->previousPageUrl() }}&per_page={{ request('per_page', 30) }}" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">
-                            Previous
-                        </a>
+                        <a href="{{ $daysPaginator->previousPageUrl() }}" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">Previous</a>
                     @endif
-                    
+
                     {{-- Page Numbers --}}
                     @php
-                        $currentPage = $positions->currentPage();
-                        $lastPage = $positions->lastPage();
-                        $start = max(1, $currentPage - 2);
-                        $end = min($lastPage, $currentPage + 2);
+                        $currentPage = $daysPaginator->currentPage();
+                        $lastPage    = $daysPaginator->lastPage();
+                        $start       = max(1, $currentPage - 2);
+                        $end         = min($lastPage, $currentPage + 2);
                     @endphp
-                    
+
                     @if($start > 1)
-                        <a href="{{ $positions->url(1) }}&per_page={{ request('per_page', 30) }}" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">
-                            1
-                        </a>
-                        @if($start > 2)
-                            <span class="px-3 py-1.5 text-gray-400">...</span>
-                        @endif
+                        <a href="{{ $daysPaginator->url(1) }}" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">1</a>
+                        @if($start > 2)<span class="px-3 py-1.5 text-gray-400">...</span>@endif
                     @endif
-                    
+
                     @for($page = $start; $page <= $end; $page++)
                         @if($page == $currentPage)
-                            <span class="px-3 py-1.5 bg-orange-600 text-white rounded-lg text-sm font-medium">
-                                {{ $page }}
-                            </span>
+                            <span class="px-3 py-1.5 bg-orange-600 text-white rounded-lg text-sm font-medium">{{ $page }}</span>
                         @else
-                            <a href="{{ $positions->url($page) }}&per_page={{ request('per_page', 30) }}" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">
-                                {{ $page }}
-                            </a>
+                            <a href="{{ $daysPaginator->url($page) }}" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">{{ $page }}</a>
                         @endif
                     @endfor
-                    
+
                     @if($end < $lastPage)
-                        @if($end < $lastPage - 1)
-                            <span class="px-3 py-1.5 text-gray-400">...</span>
-                        @endif
-                        <a href="{{ $positions->url($lastPage) }}&per_page={{ request('per_page', 30) }}" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">
-                            {{ $lastPage }}
-                        </a>
+                        @if($end < $lastPage - 1)<span class="px-3 py-1.5 text-gray-400">...</span>@endif
+                        <a href="{{ $daysPaginator->url($lastPage) }}" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">{{ $lastPage }}</a>
                     @endif
-                    
-                    {{-- Next Button --}}
-                    @if($positions->hasMorePages())
-                        <a href="{{ $positions->nextPageUrl() }}&per_page={{ request('per_page', 30) }}" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">
-                            Next
-                        </a>
+
+                    {{-- Next --}}
+                    @if($daysPaginator->hasMorePages())
+                        <a href="{{ $daysPaginator->nextPageUrl() }}" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">Next</a>
                     @else
-                        <span class="px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg text-sm cursor-not-allowed">
-                            Next
-                        </span>
+                        <span class="px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg text-sm cursor-not-allowed">Next</span>
                     @endif
-                </div>
-            @elseif(request('per_page') === 'all')
-                <div class="text-sm text-gray-600">
-                    Showing all entries
                 </div>
             @endif
         </div>

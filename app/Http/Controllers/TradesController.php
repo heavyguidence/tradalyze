@@ -25,118 +25,163 @@ class TradesController extends Controller
 
     public function index(Request $request)
     {
-        $perPage = $request->get('per_page', 30);
-        
-        // Build query with filters
-        $query = Position::with(['instrument', 'tags'])
-            ->whereHas('instrument', function($q) {
-                $q->where('user_id', auth()->id());
-            });
+        $daysPerPage = $request->get('per_page', 10);
+        $sortBy      = $request->get('sort_by', 'close_datetime');
+        $sortOrder   = $request->get('sort_order', 'desc');
 
-        // Filter by symbol keyword
-        if ($request->filled('symbol')) {
-            $query->whereHas('instrument', function($q) use ($request) {
-                $q->where('symbol', 'LIKE', '%' . $request->symbol . '%');
+        // ── Shared filter closure ────────────────────────────────────────────
+        $applyFilters = function ($q) use ($request) {
+            $q->whereHas('instrument', function ($iq) {
+                $iq->where('user_id', auth()->id());
             });
-        }
-
-        // Filter by trade state (open/closed)
-        if ($request->filled('state')) {
-            if ($request->state === 'open') {
-                $query->whereNull('close_datetime');
-            } elseif ($request->state === 'closed') {
-                $query->whereNotNull('close_datetime');
+            if ($request->filled('symbol')) {
+                $q->whereHas('instrument', fn($iq) =>
+                    $iq->where('symbol', 'LIKE', '%' . $request->symbol . '%'));
             }
-        }
-
-        // Filter by asset type
-        if ($request->filled('asset_type')) {
-            $query->whereHas('instrument', function($q) use ($request) {
-                $q->where('asset_type', $request->asset_type);
-            });
-        }
-
-        // Filter by option type (CALL/PUT)
-        if ($request->filled('put_call')) {
-            $query->whereHas('instrument', function($q) use ($request) {
-                $q->where('put_call', $request->put_call);
-            });
-        }
-
-        // Filter by opened date range
-        if ($request->filled('opened_from')) {
-            $query->whereDate('open_datetime', '>=', $request->opened_from);
-        }
-        if ($request->filled('opened_to')) {
-            $query->whereDate('open_datetime', '<=', $request->opened_to);
-        }
-
-        // Filter by closed date range
-        if ($request->filled('closed_from')) {
-            $query->whereDate('close_datetime', '>=', $request->closed_from);
-        }
-        if ($request->filled('closed_to')) {
-            $query->whereDate('close_datetime', '<=', $request->closed_to);
-        }
-
-        // Filter by tags
-        if ($request->filled('tag')) {
-            $query->whereHas('tags', function($q) use ($request) {
-                $q->where('trade_tags.id', $request->tag);
-            });
-        }
-
-        // Filter by P&L (Winner/Loser)
-        if ($request->filled('pnl_filter')) {
-            if ($request->pnl_filter === 'winner') {
-                $query->where('realized_pnl', '>', 0);
-            } elseif ($request->pnl_filter === 'loser') {
-                $query->where('realized_pnl', '<', 0);
-            } elseif ($request->pnl_filter === 'breakeven') {
-                $query->where('realized_pnl', '=', 0);
+            if ($request->filled('state')) {
+                if ($request->state === 'open')       $q->whereNull('close_datetime');
+                elseif ($request->state === 'closed') $q->whereNotNull('close_datetime');
             }
+            if ($request->filled('asset_type')) {
+                $q->whereHas('instrument', fn($iq) =>
+                    $iq->where('asset_type', $request->asset_type));
+            }
+            if ($request->filled('put_call')) {
+                $q->whereHas('instrument', fn($iq) =>
+                    $iq->where('put_call', $request->put_call));
+            }
+            if ($request->filled('opened_from'))
+                $q->whereDate('open_datetime', '>=', $request->opened_from);
+            if ($request->filled('opened_to'))
+                $q->whereDate('open_datetime', '<=', $request->opened_to);
+            if ($request->filled('closed_from'))
+                $q->whereDate('close_datetime', '>=', $request->closed_from);
+            if ($request->filled('closed_to'))
+                $q->whereDate('close_datetime', '<=', $request->closed_to);
+            if ($request->filled('tag')) {
+                $q->whereHas('tags', fn($tq) =>
+                    $tq->where('trade_tags.id', $request->tag));
+            }
+            if ($request->filled('pnl_filter')) {
+                match ($request->pnl_filter) {
+                    'winner'    => $q->where('realized_pnl', '>', 0),
+                    'loser'     => $q->where('realized_pnl', '<', 0),
+                    'breakeven' => $q->where('realized_pnl', '=', 0),
+                    default     => null,
+                };
+            }
+        };
+
+        // ── Step 1: get all distinct closed trading days (newest first) ──────
+        $datesQuery = Position::query();
+        $applyFilters($datesQuery);
+        $allClosedDates = $datesQuery
+            ->whereNotNull('close_datetime')
+            ->selectRaw('DATE(close_datetime) as trade_date')
+            ->groupBy('trade_date')
+            ->orderBy('trade_date', 'desc')
+            ->pluck('trade_date');
+
+        // Check for any open positions matching the filters
+        $openQuery = Position::query();
+        $applyFilters($openQuery);
+        $hasOpenPositions = $openQuery->whereNull('close_datetime')->exists();
+
+        // Full ordered day-key list: open bucket first (if any), then closed newest→oldest
+        $allDayKeys = $allClosedDates->values();
+        if ($hasOpenPositions) {
+            $allDayKeys->prepend('open');
         }
 
-        // Sorting
-        $sortBy = $request->get('sort_by', 'close_datetime');
-        $sortOrder = $request->get('sort_order', 'desc');
-        
+        $totalDays   = $allDayKeys->count();
+        $currentPage = max(1, (int) $request->get('page', 1));
+
+        if ($daysPerPage === 'all') {
+            $pageDayKeys = $allDayKeys;
+            $perPageInt  = max($totalDays, 1);
+        } else {
+            $perPageInt  = (int) $daysPerPage;
+            $pageDayKeys = $allDayKeys
+                ->slice(($currentPage - 1) * $perPageInt, $perPageInt)
+                ->values();
+        }
+
+        // ── Step 2: load positions only for the current page's days ─────────
+        $positionsQuery = Position::with(['instrument', 'tags']);
+        $applyFilters($positionsQuery);
+
+        $closedDateSlice = $pageDayKeys->filter(fn($d) => $d !== 'open')->values();
+        $pageHasOpen     = $pageDayKeys->contains('open');
+
+        $positionsQuery->where(function ($q) use ($closedDateSlice, $pageHasOpen) {
+            if ($pageHasOpen && $closedDateSlice->isNotEmpty()) {
+                $q->whereNull('close_datetime')
+                  ->orWhereIn(DB::raw('DATE(close_datetime)'), $closedDateSlice->toArray());
+            } elseif ($pageHasOpen) {
+                $q->whereNull('close_datetime');
+            } elseif ($closedDateSlice->isNotEmpty()) {
+                $q->whereIn(DB::raw('DATE(close_datetime)'), $closedDateSlice->toArray());
+            }
+        });
+
+        // Within-day sort
         if ($sortBy === 'symbol') {
-            $query->join('instruments', 'positions.instrument_id', '=', 'instruments.id')
+            $positionsQuery->join('instruments', 'positions.instrument_id', '=', 'instruments.id')
                 ->select('positions.*')
                 ->orderBy('instruments.symbol', $sortOrder);
         } elseif ($sortBy === 'pnl') {
-            $query->orderBy('realized_pnl', $sortOrder);
+            $positionsQuery->orderBy('realized_pnl', $sortOrder);
+        } elseif ($sortBy === 'open_datetime') {
+            $positionsQuery->orderBy('open_datetime', $sortOrder);
         } else {
-            $query->orderBy($sortBy, $sortOrder);
+            // Group days by close_datetime desc; within a day sort by open_datetime
+            $positionsQuery
+                ->orderByRaw('CASE WHEN close_datetime IS NULL THEN 0 ELSE 1 END DESC')
+                ->orderBy('close_datetime', 'desc')
+                ->orderBy('open_datetime', $sortOrder);
         }
 
-        if ($perPage === 'all') {
-            $positions = $query->get();
-            // Create a custom paginator for "all" results
-            $positions = new \Illuminate\Pagination\LengthAwarePaginator(
-                $positions,
-                $positions->count(),
-                $positions->count(),
-                1,
-                ['path' => $request->url(), 'query' => $request->query()]
-            );
-        } else {
-            $positions = $query->paginate((int)$perPage)->appends($request->except('page'));
+        $allPositions = $positionsQuery->get();
+
+        // ── Step 3: group and preserve page order ────────────────────────────
+        $rawGroups = collect();
+        foreach ($allPositions as $position) {
+            $key = $position->close_datetime
+                ? $position->close_datetime->format('Y-m-d')
+                : 'open';
+            if (!$rawGroups->has($key)) {
+                $rawGroups[$key] = collect();
+            }
+            $rawGroups[$key]->push($position);
         }
-        
-        // Get user's tags for filter
+
+        $groupedPositions = collect();
+        foreach ($pageDayKeys as $dayKey) {
+            if ($rawGroups->has($dayKey)) {
+                $groupedPositions[$dayKey] = $rawGroups[$dayKey];
+            }
+        }
+
+        // ── Step 4: build the day-based paginator ────────────────────────────
+        $daysPaginator = new \Illuminate\Pagination\LengthAwarePaginator(
+            $pageDayKeys,
+            $totalDays,
+            $perPageInt,
+            $currentPage,
+            ['path' => $request->url(), 'query' => $request->except('page')]
+        );
+
+        // ── Supplementary data ───────────────────────────────────────────────
         $userTags = TradeTag::where('user_id', auth()->id())
             ->orderBy('name')
             ->get();
 
-        // Map of date-string => DiaryEntry for day-header indicators
         $diaryEntryByDate = DiaryEntry::where('user_id', auth()->id())
             ->whereNotNull('entry_date')
             ->get()
             ->keyBy(fn($e) => $e->entry_date->format('Y-m-d'));
 
-        return view('trades', compact('positions', 'userTags', 'diaryEntryByDate'));
+        return view('trades', compact('groupedPositions', 'daysPaginator', 'totalDays', 'userTags', 'diaryEntryByDate'));
     }
 
     public function create()

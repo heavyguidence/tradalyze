@@ -40,7 +40,7 @@ ENV APP_NAME=Tradalyze \
     FILESYSTEM_DISK=local
 
 # Get latest Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY --from=docker.io/library/composer:latest /usr/bin/composer /usr/bin/composer
 
 # Copy application files
 COPY . /var/www/html

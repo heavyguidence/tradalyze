@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\DiaryEntry;
 use App\Models\Position;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 class DiaryController extends Controller
 {
@@ -127,7 +126,7 @@ class DiaryController extends Controller
 
         $path = $request->file('image')->store('diary-images', 'public');
 
-        return response()->json(['url' => Storage::disk('public')->url($path)]);
+        return response()->json(['url' => '/storage/' . $path]);
     }
 
     /**

@@ -842,7 +842,7 @@ class TradesController extends Controller
             'success'    => true,
             'screenshot' => [
                 'id'   => $screenshot->id,
-                'url'  => Storage::disk('public')->url($path),
+                'url'  => '/storage/' . $path,
                 'name' => $screenshot->original_name,
             ],
         ]);

@@ -127,6 +127,42 @@
                             <path d="M18.59 7L12 13.59 5.41 7 4 8.41l8 8 8-8L18.59 7z"/>
                         </svg>
                     </button>
+
+                    <div class="w-px bg-gray-300 mx-1"></div>
+
+                    <!-- Template Picker -->
+                    <div class="relative" id="template-picker-wrap">
+                        <button type="button"
+                            onclick="toggleTemplatePicker()"
+                            class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded transition"
+                            title="Insert a pre-built template">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            </svg>
+                            Templates
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+
+                        <!-- Dropdown -->
+                        <div id="template-dropdown"
+                            class="hidden absolute left-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-xl py-1 min-w-[220px]">
+                            <p class="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-widest">Choose a template</p>
+                            <button type="button" onclick="insertTemplate('options')"
+                                class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 flex items-center gap-2">
+                                <span class="text-base">📉</span> Options Trade
+                            </button>
+                            <button type="button" onclick="insertTemplate('stocks')"
+                                class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 flex items-center gap-2">
+                                <span class="text-base">📈</span> Stocks / Futures Trade
+                            </button>
+                            <button type="button" onclick="insertTemplate('reflection')"
+                                class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700 flex items-center gap-2">
+                                <span class="text-base">🧠</span> Daily Reflection
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Editable Content Area -->
@@ -375,6 +411,197 @@
         if (confirm('Are you sure you want to clear all content?')) {
             document.getElementById('editor').innerHTML = '';
         }
+    }
+
+    // ── Template picker ──────────────────────────────────────────────────────
+    function toggleTemplatePicker() {
+        const dd = document.getElementById('template-dropdown');
+        dd.classList.toggle('hidden');
+    }
+
+    // Close dropdown if user clicks outside
+    document.addEventListener('click', function(e) {
+        const wrap = document.getElementById('template-picker-wrap');
+        if (wrap && !wrap.contains(e.target)) {
+            document.getElementById('template-dropdown').classList.add('hidden');
+        }
+    });
+
+    const DIARY_TEMPLATES = {
+        options: `
+<h2>📉 Options Trade Journal</h2>
+
+<h3>Trade Setup</h3>
+<ul>
+  <li><strong>Symbol:</strong> &nbsp;</li>
+  <li><strong>Strategy:</strong> &nbsp;(e.g. Bull Put Spread, Iron Condor, Naked Call…)</li>
+  <li><strong>Direction:</strong> &nbsp;Bullish / Bearish / Neutral</li>
+  <li><strong>Expiry:</strong> &nbsp; &nbsp;<strong>Strike(s):</strong> &nbsp; &nbsp;<strong>Call / Put:</strong> &nbsp;</li>
+  <li><strong>Contracts:</strong> &nbsp; &nbsp;<strong>Premium:</strong> &nbsp;$&nbsp;(credit / debit)</li>
+  <li><strong>IV at Entry:</strong> &nbsp;% &nbsp;&nbsp;<strong>IV Rank / Percentile:</strong> &nbsp;%</li>
+  <li><strong>Days to Expiry (DTE):</strong> &nbsp;</li>
+</ul>
+
+<h3>Risk &amp; Reward</h3>
+<ul>
+  <li><strong>Max Profit:</strong> &nbsp;$ &nbsp;&nbsp;<strong>Max Loss:</strong> &nbsp;$</li>
+  <li><strong>Breakeven(s):</strong> &nbsp;</li>
+  <li><strong>Risk / Reward:</strong> &nbsp;</li>
+  <li><strong>Position Size (% of account):</strong> &nbsp;%</li>
+</ul>
+
+<h3>Reason to Enter</h3>
+<p><em>What technical or fundamental catalyst triggered this trade?</em></p>
+<p>&nbsp;</p>
+
+<h3>Trade Thesis</h3>
+<p><em>What must happen for this trade to be profitable?</em></p>
+<p>&nbsp;</p>
+
+<h3>Exit Plan</h3>
+<ul>
+  <li><strong>Profit Target:</strong> &nbsp;% of max profit or $&nbsp;</li>
+  <li><strong>Stop Loss / Adjustment Trigger:</strong> &nbsp;</li>
+  <li><strong>Time Stop:</strong> &nbsp;(e.g. close at 21 DTE)</li>
+</ul>
+
+<h3>Actual Exit</h3>
+<ul>
+  <li><strong>Exit Date:</strong> &nbsp; &nbsp;<strong>Exit Price:</strong> &nbsp;$</li>
+  <li><strong>P&amp;L:</strong> &nbsp;$ &nbsp;&nbsp;<strong>Result:</strong> &nbsp;Win / Loss / Scratch</li>
+</ul>
+
+<h3>Post-Trade Review</h3>
+<ul>
+  <li><strong>Did I follow my plan?</strong> &nbsp;Yes / No — Why?</li>
+  <li><strong>What worked:</strong> &nbsp;</li>
+  <li><strong>What I'd do differently:</strong> &nbsp;</li>
+  <li><strong>Lesson learned:</strong> &nbsp;</li>
+</ul>
+`,
+
+        stocks: `
+<h2>📈 Stock / Futures Trade Journal</h2>
+
+<h3>Trade Setup</h3>
+<ul>
+  <li><strong>Symbol / Instrument:</strong> &nbsp;</li>
+  <li><strong>Direction:</strong> &nbsp;Long / Short</li>
+  <li><strong>Shares / Contracts:</strong> &nbsp;</li>
+  <li><strong>Entry Price:</strong> &nbsp;$ &nbsp;&nbsp;<strong>Entry Date &amp; Time:</strong> &nbsp;</li>
+  <li><strong>Timeframe:</strong> &nbsp;(e.g. intraday, swing, position)</li>
+</ul>
+
+<h3>Risk &amp; Reward</h3>
+<ul>
+  <li><strong>Stop Loss:</strong> &nbsp;$ &nbsp;&nbsp;<strong>Risk per Share:</strong> &nbsp;$</li>
+  <li><strong>Target Price:</strong> &nbsp;$ &nbsp;&nbsp;<strong>Reward per Share:</strong> &nbsp;$</li>
+  <li><strong>R:R Ratio:</strong> &nbsp;1 : &nbsp;</li>
+  <li><strong>Total Risk ($):</strong> &nbsp;$ &nbsp;&nbsp;<strong>Position Size (% of account):</strong> &nbsp;%</li>
+</ul>
+
+<h3>Reason to Enter</h3>
+<p><em>Catalyst, pattern, or signal that triggered this trade:</em></p>
+<p>&nbsp;</p>
+
+<h3>Invalidation Criteria</h3>
+<p><em>What price action or condition would prove this thesis wrong?</em></p>
+<p>&nbsp;</p>
+
+<h3>Market Context</h3>
+<ul>
+  <li><strong>Market trend (higher timeframe):</strong> &nbsp;</li>
+  <li><strong>Key levels nearby:</strong> &nbsp;</li>
+  <li><strong>News / catalyst:</strong> &nbsp;</li>
+</ul>
+
+<h3>Actual Exit</h3>
+<ul>
+  <li><strong>Exit Price:</strong> &nbsp;$ &nbsp;&nbsp;<strong>Exit Date &amp; Time:</strong> &nbsp;</li>
+  <li><strong>P&amp;L:</strong> &nbsp;$ &nbsp;&nbsp;<strong>Result:</strong> &nbsp;Win / Loss / Break-even</li>
+  <li><strong>Reason for exit:</strong> &nbsp;</li>
+</ul>
+
+<h3>Post-Trade Review</h3>
+<ul>
+  <li><strong>Did I follow my plan?</strong> &nbsp;Yes / No — Why?</li>
+  <li><strong>Execution quality (1–5):</strong> &nbsp;</li>
+  <li><strong>What worked:</strong> &nbsp;</li>
+  <li><strong>What I'd do differently:</strong> &nbsp;</li>
+  <li><strong>Lesson learned:</strong> &nbsp;</li>
+</ul>
+`,
+
+        reflection: `
+<h2>🧠 Daily Trading Reflection</h2>
+
+<h3>Market Overview</h3>
+<ul>
+  <li><strong>Overall market tone:</strong> &nbsp;Risk-on / Risk-off / Choppy</li>
+  <li><strong>Key levels hit / rejected:</strong> &nbsp;</li>
+  <li><strong>Major news / events today:</strong> &nbsp;</li>
+</ul>
+
+<h3>Trades Taken Today</h3>
+<ul>
+  <li><strong>Number of trades:</strong> &nbsp; &nbsp;<strong>Wins:</strong> &nbsp; &nbsp;<strong>Losses:</strong> &nbsp;</li>
+  <li><strong>Net P&amp;L:</strong> &nbsp;$</li>
+</ul>
+
+<h3>What Worked Well</h3>
+<p>&nbsp;</p>
+
+<h3>What Didn't Work</h3>
+<p>&nbsp;</p>
+
+<h3>Rules Followed ✅ / Broken ❌</h3>
+<ul>
+  <li>&nbsp;</li>
+</ul>
+
+<h3>Emotional State</h3>
+<ul>
+  <li><strong>Before session:</strong> &nbsp;</li>
+  <li><strong>During session:</strong> &nbsp;</li>
+  <li><strong>After session:</strong> &nbsp;</li>
+</ul>
+
+<h3>Goals for Next Session</h3>
+<ol>
+  <li>&nbsp;</li>
+  <li>&nbsp;</li>
+  <li>&nbsp;</li>
+</ol>
+
+<h3>Key Lesson of the Day</h3>
+<p>&nbsp;</p>
+`
+    };
+
+    function insertTemplate(key) {
+        const editor  = document.getElementById('editor');
+        const tpl     = DIARY_TEMPLATES[key];
+        const isEmpty = editor.innerHTML.trim() === '' || editor.innerText.trim() === '';
+
+        if (!isEmpty) {
+            if (!confirm('The editor already has content. Append the template below it?')) {
+                document.getElementById('template-dropdown').classList.add('hidden');
+                return;
+            }
+            editor.innerHTML += '<hr style="margin:1.5rem 0;border-color:#e5e7eb">' + tpl;
+        } else {
+            editor.innerHTML = tpl;
+        }
+
+        document.getElementById('template-dropdown').classList.add('hidden');
+        editor.focus();
+        // Move cursor to end
+        const range = document.createRange();
+        range.selectNodeContents(editor);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
     }
 
     // ── Date picker: check for existing entry when date changes ──────────────

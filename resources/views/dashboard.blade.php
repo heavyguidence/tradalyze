@@ -983,7 +983,7 @@ function computeMonthlyStats(year, month) {
         if (pnl > 0) { grossProfit += pnl; winDays++; }
         else if (pnl < 0) { grossLoss += Math.abs(pnl); lossDays++; }
         if (bestDay  === null || pnl > bestDay)  { bestDay  = pnl; bestDayDate  = date; }
-        if (worstDay === null || pnl < worstDay) { worstDay = pnl; worstDayDate = date; }
+        if (pnl < 0 && (worstDay === null || pnl < worstDay)) { worstDay = pnl; worstDayDate = date; }
     });
 
     const winRate = tradingDays > 0 ? Math.round((winDays / tradingDays) * 100) : 0;
@@ -1036,8 +1036,8 @@ function updateMonthlyStats(year, month) {
     document.getElementById('monthly-best-day-date').textContent = _fmtDate(stats.bestDayDate);
 
     const worstEl = document.getElementById('monthly-worst-day');
-    worstEl.textContent = stats.worstDay !== null ? _fmtMoney(stats.worstDay) : '—';
-    worstEl.className   = 'text-base font-bold ' + (stats.worstDay !== null && stats.worstDay >= 0 ? 'text-emerald-600' : 'text-red-600');
+    worstEl.textContent = stats.worstDay !== null ? _fmtMoney(stats.worstDay) : '$0.00';
+    worstEl.className   = 'text-base font-bold ' + (stats.worstDay !== null ? 'text-red-600' : 'text-gray-400');
     document.getElementById('monthly-worst-day-date').textContent = _fmtDate(stats.worstDayDate);
 }
 </script>

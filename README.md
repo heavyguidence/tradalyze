@@ -28,8 +28,9 @@ Explore the application interface and features in our [Screenshots Gallery](scre
 - 📈 **FIFO Position Tracking** - Automatic first-in-first-out position calculation
 - 📅 **Trading Diary** - Document your trading decisions and lessons learned
 - 🔄 **Auto Import** - Import trades directly from Interactive Brokers using Flex API
-- 📉 **Performance Analytics** - Comprehensive dashboard with P&L charts and statistics
-- 🏷️ **Trade Tags** - Organize trades by setup type and strategy
+- 📉 **Performance Analytics** - Dashboard with P&L charts, profit factor, avg winner/loser, consecutive streaks, best/worst day & month, and win rate by tag
+- ✏️ **Edit Position State** - Manually close or reopen positions with custom close price and datetime
+- 🏷️ **Trade Tags** - Organize trades by setup type and strategy with per-tag win rate analytics
 - 🔍 **Advanced Filtering** - Filter trades by symbol, date, P&L, tags, and more
 - 📱 **Responsive Design** - Works seamlessly on desktop and mobile devices
 
@@ -198,10 +199,14 @@ To use the Auto Import feature:
 ### View Analytics
 
 The Dashboard provides:
-- Total trades and win rate
-- Net profit/loss statistics
+- Total trades, win rate, net profit/loss statistics
+- **Profit Factor**, average winner vs. average loser
+- **Consecutive win/loss streak** tracker (current and all-time max)
+- **Best/Worst Day and Month** (all-time)
+- **Win Rate by Tag** — per-tag win %, W/L counts, and net P&L
+- Account balance and cumulative P&L history charts
 - Daily P&L bar chart for current month
-- Calendar heatmap of trading activity
+- Calendar heatmap with monthly P&L breakdown panel
 - Recent trades overview
 
 ## Tech Stack

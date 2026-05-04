@@ -227,6 +227,37 @@ class TradesController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        // ── Position state update (close / reopen) ───────────────────────────
+        if ($request->input('update_type') === 'position_state') {
+
+            if ($request->boolean('reopen')) {
+                $position->update([
+                    'close_datetime'  => null,
+                    'realized_pnl'    => null,
+                    'manually_closed' => false,
+                ]);
+                return back()->with('success', 'Position has been reopened successfully.');
+            }
+
+            $request->validate([
+                'close_datetime' => [
+                    'required',
+                    'date',
+                    'after_or_equal:' . $position->open_datetime->toDateString(),
+                ],
+                'realized_pnl' => ['required', 'numeric'],
+            ]);
+
+            $position->update([
+                'close_datetime'  => $request->input('close_datetime'),
+                'realized_pnl'    => $request->input('realized_pnl'),
+                'manually_closed' => true,
+            ]);
+
+            return back()->with('success', 'Position state updated successfully.');
+        }
+
+        // ── Default: notes update ────────────────────────────────────────────
         $request->validate([
             'notes' => 'nullable|string',
         ]);

@@ -76,7 +76,7 @@
                 <!-- Status -->
                 <div>
                     <label class="text-xs font-medium text-gray-500 uppercase tracking-wider">Status</label>
-                    <div class="mt-2">
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
                         @if($position->isClosed())
                             @if($position->isProfitable())
                                 <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
@@ -99,6 +99,14 @@
                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"></path>
                                 </svg>
                                 Open
+                            </span>
+                        @endif
+                        @if($position->manually_closed)
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800" title="Close details were set manually">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 13l6.5-6.5M3 21h4l11-11a2.828 2.828 0 10-4-4L3 17v4z"/>
+                                </svg>
+                                Manual
                             </span>
                         @endif
                     </div>
@@ -184,6 +192,129 @@
                     </div>
                 @endif
             </div>
+        </div>
+    </div>
+
+    <!-- Edit Position State -->
+    @php
+        $isShort    = $position->quantity < 0;
+        $absQty     = abs((float) $position->quantity);
+        $multiplier = $position->instrument->multiplier;
+        $costBasis  = (float) $position->cost_basis;
+    @endphp
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+        <div class="px-6 py-5 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">
+                {{ $position->isOpen() ? 'Close Position' : 'Edit Close Details' }}
+            </h2>
+            <p class="text-sm text-gray-500 mt-1">
+                {{ $position->isOpen()
+                    ? 'Manually close this position with a specific outcome.'
+                    : 'Adjust close date and realized P&L, or reopen this position.' }}
+            </p>
+        </div>
+        <div class="px-6 py-5">
+
+            @if(session('success') && (str_contains(session('success'), 'Position') || str_contains(session('success'), 'position')))
+                <div class="mb-4 rounded-md bg-green-50 p-4 flex items-center gap-3">
+                    <svg class="h-5 w-5 text-green-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                    <p class="text-sm font-medium text-green-800">{{ session('success') }}</p>
+                </div>
+            @endif
+
+            {{-- Expired worthless tip for open short options --}}
+            @if($position->isOpen() && $isShort && $position->instrument->isOption())
+                <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                    <strong>Short option tip:</strong>
+                    If this {{ $position->instrument->put_call }} option expired worthless (close price&nbsp;=&nbsp;$0),
+                    you keep the full premium. Suggested Realized P&amp;L:
+                    <strong>${{ number_format($costBasis, 2) }}</strong>.
+                    Set the close date to the expiration date, enter $0 as Close Price, and the P&amp;L will be filled in automatically.
+                </div>
+            @endif
+
+            {{-- Main form: close or update close details --}}
+            <form action="{{ route('trades.update', $position) }}" method="POST">
+                @csrf
+                @method('PATCH')
+                <input type="hidden" name="update_type" value="position_state">
+
+                <div class="grid grid-cols-3 gap-4 mb-5">
+                    {{-- Close Date/Time --}}
+                    <div>
+                        <label for="close_datetime" class="block text-sm font-medium text-gray-700 mb-1">
+                            Close Date &amp; Time <span class="text-red-500">*</span>
+                        </label>
+                        <input type="datetime-local"
+                               name="close_datetime"
+                               id="close_datetime"
+                               value="{{ $position->close_datetime ? $position->close_datetime->format('Y-m-d\TH:i') : '' }}"
+                               min="{{ $position->open_datetime->format('Y-m-d\TH:i') }}"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                        @error('close_datetime')
+                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    {{-- Close Price (optional, auto-fills P&L) --}}
+                    <div>
+                        <label for="close_price_hint" class="block text-sm font-medium text-gray-700 mb-1">
+                            Close Price ($) <span class="text-gray-400 font-normal text-xs">— optional, auto-fills P&amp;L</span>
+                        </label>
+                        <input type="number"
+                               id="close_price_hint"
+                               step="0.0001"
+                               min="0"
+                               placeholder="0.00"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                        <p class="mt-1 text-xs text-gray-400">Excludes close fees</p>
+                    </div>
+
+                    {{-- Realized P&L (required) --}}
+                    <div>
+                        <label for="realized_pnl_input" class="block text-sm font-medium text-gray-700 mb-1">
+                            Realized P&amp;L ($) <span class="text-red-500">*</span>
+                        </label>
+                        <input type="number"
+                               name="realized_pnl"
+                               id="realized_pnl_input"
+                               step="0.01"
+                               value="{{ old('realized_pnl', $position->realized_pnl) }}"
+                               placeholder="e.g. 150.00 or -75.50"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                        @error('realized_pnl')
+                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
+
+                <div class="flex justify-end">
+                    <button type="submit"
+                            class="px-6 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition-colors">
+                        {{ $position->isOpen() ? 'Close Position' : 'Update Close Details' }}
+                    </button>
+                </div>
+            </form>
+
+            @if($position->isClosed())
+                <hr class="my-5 border-gray-200">
+                <div class="flex items-center justify-between">
+                    <p class="text-sm text-gray-500">Need to revert this close? Reopen the position to re-enter data.</p>
+                    <form action="{{ route('trades.update', $position) }}" method="POST">
+                        @csrf
+                        @method('PATCH')
+                        <input type="hidden" name="update_type" value="position_state">
+                        <input type="hidden" name="reopen" value="1">
+                        <button type="submit"
+                                onclick="return confirm('Reopen this position? The close date and realized P&L will be cleared.')"
+                                class="px-4 py-2 border border-yellow-400 text-yellow-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+                            Reopen Position
+                        </button>
+                    </form>
+                </div>
+            @endif
         </div>
     </div>
 
@@ -512,6 +643,36 @@
 </div>
 
 <script>
+    // ── Close Price → P&L auto-calculation ───────────────────────────────────
+    (function () {
+        const posQty      = {{ (float) $position->quantity }};
+        const multiplier  = {{ (int)   $position->instrument->multiplier }};
+        const costBasis   = {{ (float) $position->cost_basis }};
+
+        const closePriceEl = document.getElementById('close_price_hint');
+        const realizedPnlEl = document.getElementById('realized_pnl_input');
+
+        if (closePriceEl && realizedPnlEl) {
+            closePriceEl.addEventListener('input', function () {
+                const closePrice = parseFloat(this.value);
+                if (isNaN(closePrice) || closePrice < 0) return;
+
+                const absQty = Math.abs(posQty);
+                let pnl;
+
+                if (posQty >= 0) {
+                    // Long: P&L = proceeds − cost_basis
+                    pnl = (closePrice * absQty * multiplier) - costBasis;
+                } else {
+                    // Short: P&L = credit received − cost to close
+                    pnl = costBasis - (closePrice * absQty * multiplier);
+                }
+
+                realizedPnlEl.value = pnl.toFixed(2);
+            });
+        }
+    })();
+
     async function addTag(tagId, tagName, tagColor) {
         try {
             const response = await fetch(`/trades/{{ $position->id }}/tags/${tagId}/attach`, {

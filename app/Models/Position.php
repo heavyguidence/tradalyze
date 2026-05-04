@@ -18,6 +18,7 @@ class Position extends Model
         'cost_basis',
         'realized_pnl',
         'notes',
+        'manually_closed',
     ];
 
     protected $casts = [
@@ -26,6 +27,7 @@ class Position extends Model
         'quantity' => 'decimal:2',
         'cost_basis' => 'decimal:4',
         'realized_pnl' => 'decimal:2',
+        'manually_closed' => 'boolean',
     ];
 
     public function instrument(): BelongsTo

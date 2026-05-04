@@ -101,8 +101,98 @@ class DashboardController extends Controller
         
         // Calculate Net P&L History
         $pnlHistory = $this->calculatePnLHistory();
-        
-        return view('dashboard', compact('totalTrades', 'winningTrades', 'losingTrades', 'winRate', 'netProfit', 'netLoss', 'totalCommissions', 'accountBalance', 'dailyPnL', 'recentTrades', 'chartLabels', 'chartData', 'balanceHistory', 'pnlHistory'));
+
+        // ── Performance Analytics ──────────────────────────────────────────────
+
+        // Profit Factor = gross profit / gross loss
+        $profitFactor = $netLoss > 0
+            ? round($netProfit / $netLoss, 2)
+            : ($netProfit > 0 ? '∞' : 0);
+
+        // Average winner / average loser
+        $avgWinner = $winningTrades > 0 ? round($netProfit / $winningTrades, 2) : 0;
+        $avgLoser  = $losingTrades  > 0 ? round($netLoss  / $losingTrades,  2) : 0;
+
+        // Consecutive win/loss streaks
+        $sortedPositions = $closedPositions->sortBy('close_datetime')->values();
+        $currentStreak   = 0;
+        $maxWinStreak    = 0;
+        $maxLossStreak   = 0;
+        $lastIsWin       = null;
+        foreach ($sortedPositions as $pos) {
+            $isWin = $pos->realized_pnl > 0;
+            if ($lastIsWin === null || $isWin !== $lastIsWin) {
+                $currentStreak = $isWin ? 1 : -1;
+            } else {
+                $currentStreak += $isWin ? 1 : -1;
+            }
+            if ($currentStreak > $maxWinStreak)   $maxWinStreak  = $currentStreak;
+            if (-$currentStreak > $maxLossStreak) $maxLossStreak = -$currentStreak;
+            $lastIsWin = $isWin;
+        }
+        $currentStreakIsWin    = $currentStreak > 0;
+        $currentStreakDisplay  = abs($currentStreak);
+
+        // All-time best / worst trading day
+        $bestDayPnl = $worstDayPnl = null;
+        $bestDayDate = $worstDayDate = null;
+        foreach ($dailyPnL as $date => $row) {
+            $pnl = (float) $row->total_pnl;
+            if ($bestDayPnl  === null || $pnl > $bestDayPnl)  { $bestDayPnl  = $pnl; $bestDayDate  = $date; }
+            if ($worstDayPnl === null || $pnl < $worstDayPnl) { $worstDayPnl = $pnl; $worstDayDate = $date; }
+        }
+
+        // All-time best / worst trading month
+        $monthlyPnLRows = Position::whereHas('instrument', function($query) {
+            $query->where('user_id', auth()->id());
+        })->whereNotNull('close_datetime')
+          ->whereNotNull('realized_pnl')
+          ->selectRaw("strftime('%Y-%m', close_datetime) as month, SUM(realized_pnl) as total_pnl")
+          ->groupBy('month')
+          ->get();
+        $bestMonthPnl = $worstMonthPnl = null;
+        $bestMonth = $worstMonth = null;
+        foreach ($monthlyPnLRows as $row) {
+            $pnl   = (float) $row->total_pnl;
+            $month = $row->month;
+            if ($bestMonthPnl  === null || $pnl > $bestMonthPnl)  { $bestMonthPnl  = $pnl; $bestMonth  = $month; }
+            if ($worstMonthPnl === null || $pnl < $worstMonthPnl) { $worstMonthPnl = $pnl; $worstMonth = $month; }
+        }
+
+        // Win rate by tag
+        $winRateByTag = \App\Models\TradeTag::where('user_id', auth()->id())
+            ->with(['positions' => function($q) {
+                $q->whereNotNull('realized_pnl');
+            }])
+            ->get()
+            ->map(function($tag) {
+                $total = $tag->positions->count();
+                $wins  = $tag->positions->where('realized_pnl', '>', 0)->count();
+                return [
+                    'name'     => $tag->name,
+                    'color'    => $tag->color,
+                    'total'    => $total,
+                    'wins'     => $wins,
+                    'losses'   => $total - $wins,
+                    'win_rate' => $total > 0 ? round(($wins / $total) * 100) : 0,
+                    'pnl'      => round($tag->positions->sum('realized_pnl'), 2),
+                ];
+            })
+            ->filter(fn($t) => $t['total'] > 0)
+            ->sortByDesc('total')
+            ->values();
+
+        return view('dashboard', compact(
+            'totalTrades', 'winningTrades', 'losingTrades', 'winRate',
+            'netProfit', 'netLoss', 'totalCommissions', 'accountBalance',
+            'dailyPnL', 'recentTrades', 'chartLabels', 'chartData',
+            'balanceHistory', 'pnlHistory',
+            'profitFactor', 'avgWinner', 'avgLoser',
+            'maxWinStreak', 'maxLossStreak', 'currentStreakIsWin', 'currentStreakDisplay',
+            'bestDayPnl', 'bestDayDate', 'worstDayPnl', 'worstDayDate',
+            'bestMonthPnl', 'bestMonth', 'worstMonthPnl', 'worstMonth',
+            'winRateByTag'
+        ));
     }
     
     /**

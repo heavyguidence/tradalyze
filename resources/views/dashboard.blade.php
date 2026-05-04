@@ -196,6 +196,123 @@
     </div>
 </div>
 
+<!-- Performance Analytics -->
+<div class="mb-8">
+    <h3 class="text-xl font-bold text-gray-900 mb-4">Performance Analytics</h3>
+
+    <!-- Row 1: Key metrics -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+
+        <!-- Profit Factor -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Profit Factor</p>
+            <p class="text-3xl font-bold {{ (is_numeric($profitFactor) && $profitFactor >= 1) || $profitFactor === '∞' ? 'text-emerald-600' : 'text-red-600' }}">{{ $profitFactor }}</p>
+            <p class="text-xs text-gray-400 mt-2">Gross Profit ÷ Gross Loss</p>
+        </div>
+
+        <!-- Avg Winner -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Avg Winner</p>
+            <p class="text-3xl font-bold text-emerald-600">+${{ number_format($avgWinner, 2) }}</p>
+            <p class="text-xs text-gray-400 mt-2">Per winning trade</p>
+        </div>
+
+        <!-- Avg Loser -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Avg Loser</p>
+            <p class="text-3xl font-bold text-red-600">-${{ number_format($avgLoser, 2) }}</p>
+            <p class="text-xs text-gray-400 mt-2">Per losing trade</p>
+        </div>
+
+        <!-- Current Streak -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Current Streak</p>
+            <p class="text-3xl font-bold {{ $currentStreakIsWin ? 'text-emerald-600' : 'text-red-600' }}">
+                {{ $currentStreakDisplay > 0 ? $currentStreakDisplay . ($currentStreakIsWin ? 'W' : 'L') : '—' }}
+            </p>
+            <p class="text-xs text-gray-400 mt-2">Best: {{ $maxWinStreak }}W &nbsp;|&nbsp; Worst: {{ $maxLossStreak }}L</p>
+        </div>
+    </div>
+
+    <!-- Row 2: Best / Worst Day & Month -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+
+        <!-- Best Day -->
+        <div class="bg-emerald-50 rounded-xl shadow p-6">
+            <p class="text-xs text-emerald-600 uppercase tracking-wide mb-1">Best Day</p>
+            <p class="text-2xl font-bold text-emerald-600">
+                @if($bestDayPnl !== null) +${{ number_format($bestDayPnl, 2) }} @else — @endif
+            </p>
+            <p class="text-xs text-gray-500 mt-2">
+                @if($bestDayDate) {{ \Carbon\Carbon::parse($bestDayDate)->format('M d, Y') }} @endif
+            </p>
+        </div>
+
+        <!-- Worst Day -->
+        <div class="bg-red-50 rounded-xl shadow p-6">
+            <p class="text-xs text-red-600 uppercase tracking-wide mb-1">Worst Day</p>
+            <p class="text-2xl font-bold text-red-600">
+                @if($worstDayPnl !== null) ${{ number_format($worstDayPnl, 2) }} @else — @endif
+            </p>
+            <p class="text-xs text-gray-500 mt-2">
+                @if($worstDayDate) {{ \Carbon\Carbon::parse($worstDayDate)->format('M d, Y') }} @endif
+            </p>
+        </div>
+
+        <!-- Best Month -->
+        <div class="bg-emerald-50 rounded-xl shadow p-6">
+            <p class="text-xs text-emerald-600 uppercase tracking-wide mb-1">Best Month</p>
+            <p class="text-2xl font-bold text-emerald-600">
+                @if($bestMonthPnl !== null) +${{ number_format($bestMonthPnl, 2) }} @else — @endif
+            </p>
+            <p class="text-xs text-gray-500 mt-2">
+                @if($bestMonth) {{ \Carbon\Carbon::parse($bestMonth . '-01')->format('M Y') }} @endif
+            </p>
+        </div>
+
+        <!-- Worst Month -->
+        <div class="bg-red-50 rounded-xl shadow p-6">
+            <p class="text-xs text-red-600 uppercase tracking-wide mb-1">Worst Month</p>
+            <p class="text-2xl font-bold text-red-600">
+                @if($worstMonthPnl !== null) ${{ number_format($worstMonthPnl, 2) }} @else — @endif
+            </p>
+            <p class="text-xs text-gray-500 mt-2">
+                @if($worstMonth) {{ \Carbon\Carbon::parse($worstMonth . '-01')->format('M Y') }} @endif
+            </p>
+        </div>
+    </div>
+
+    <!-- Win Rate by Tag -->
+    @if($winRateByTag->isNotEmpty())
+    <div class="bg-white rounded-xl shadow-lg p-6">
+        <h4 class="text-lg font-semibold text-gray-900 mb-4">Win Rate by Tag</h4>
+        <div class="space-y-3">
+            @foreach($winRateByTag as $tag)
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2" style="width:9rem;">
+                    <div class="w-3 h-3 rounded-full flex-shrink-0" style="background-color: {{ $tag['color'] ?? '#6b7280' }};"></div>
+                    <span class="text-sm font-medium text-gray-700 truncate">{{ $tag['name'] }}</span>
+                </div>
+                <div class="flex-1">
+                    <div class="flex h-2.5 rounded-full overflow-hidden bg-gray-100">
+                        <div class="bg-emerald-500 transition-all duration-500" style="width: {{ $tag['win_rate'] }}%;"></div>
+                        <div class="bg-red-400 transition-all duration-500" style="width: {{ 100 - $tag['win_rate'] }}%;"></div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 text-xs text-gray-500" style="min-width:10rem;">
+                    <span class="font-semibold text-emerald-600">{{ $tag['win_rate'] }}%</span>
+                    <span>{{ $tag['wins'] }}W / {{ $tag['losses'] }}L</span>
+                    <span class="font-medium {{ $tag['pnl'] >= 0 ? 'text-emerald-600' : 'text-red-600' }}">
+                        {{ $tag['pnl'] >= 0 ? '+' : '' }}${{ number_format($tag['pnl'], 2) }}
+                    </span>
+                </div>
+            </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
+</div>
+
 <!-- Account Balance & P&L History Charts (50/50 Split) -->
 <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
     <!-- Account Balance History Chart -->
